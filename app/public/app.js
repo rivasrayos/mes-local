@@ -137,11 +137,29 @@ async function loadDashboard() {
     data: {
       labels: data.byLine.map((l) => l.lineNumber),
       datasets: [
-        { label: 'Total', data: data.byLine.map((l) => l.total), backgroundColor: '#0f6e7c' },
-        { label: 'Fail', data: data.byLine.map((l) => l.failCount), backgroundColor: '#b42318' },
+        {
+          label: 'Pass',
+          data: data.byLine.map((l) => Math.max(0, (l.total || 0) - (l.failCount || 0))),
+          backgroundColor: '#0f6e7c',
+          stack: 'line',
+        },
+        {
+          label: 'Fail',
+          data: data.byLine.map((l) => l.failCount || 0),
+          backgroundColor: '#b42318',
+          stack: 'line',
+        },
       ],
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, beginAtZero: true },
+      },
+      plugins: { legend: { position: 'bottom' } },
+    },
   });
 
   const paramNames = Object.keys(data.parameters || {});
@@ -214,7 +232,18 @@ async function openDetail(id) {
   const params = (item.parameters || []).map((p) => `
     <dt>${p.parameterName}</dt><dd>${p.parameterValue ?? ''}</dd>
   `).join('');
-  const images = (item.imageUrls || []).map((u) => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`).join('') || '<span>—</span>';
+  const images = (item.imageUrls || []).map((u) => {
+    const isEmbed = /\/embed\/capture\//i.test(u) || (!/\.(jpe?g|png|gif|webp|bmp)(\?|$)/i.test(u) && /capture_id=/i.test(u));
+    const media = isEmbed
+      ? `<iframe src="${u}" title="capture" loading="lazy" referrerpolicy="no-referrer"></iframe>`
+      : `<a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="inspection image" loading="lazy" referrerpolicy="no-referrer" /></a>`;
+    return `
+      <figure class="img-card">
+        ${media}
+        <figcaption><a href="${u}" target="_blank" rel="noopener">Abrir</a></figcaption>
+      </figure>
+    `;
+  }).join('') || '<span>—</span>';
 
   $('drawerBody').innerHTML = `
     <dl class="kv">
@@ -236,8 +265,8 @@ async function openDetail(id) {
       <dt>createdAt</dt><dd>${item.createdAt || ''}</dd>
       ${params}
     </dl>
-    <h3>imageUrls</h3>
-    <div class="img-list">${images}</div>
+    <h3>Imágenes</h3>
+    <div class="img-grid">${images}</div>
   `;
   $('drawer').classList.remove('hidden');
   $('drawer').setAttribute('aria-hidden', 'false');
