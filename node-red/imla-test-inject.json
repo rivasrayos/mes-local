@@ -1,0 +1,66 @@
+[
+  {
+    "id": "imla_test_inject_tab",
+    "type": "tab",
+    "label": "IMLA MES test",
+    "disabled": false,
+    "info": "Inject de prueba → conectar a pack_mes_v2_msg → HTTP request a /api/inspections"
+  },
+  {
+    "id": "imla_test_inject",
+    "type": "inject",
+    "z": "imla_test_inject_tab",
+    "name": "Fake IMLA capture (pos 1-2)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "imla-test",
+    "payload": "{\"1\":{\"cam_bottom_1\":{\"view\":\"bottom\",\"carrier_id\":\"CARRIER-TEST-001\",\"inspection_time\":\"2026-08-06T17:30:00.000Z\",\"pass_fail\":\"pass\",\"image_url\":\"http://192.168.11.50/images/pos1_bottom.jpg\",\"ip_mezzanine\":\"192.168.11.50\",\"capture_id\":\"cap-pos1-bottom\",\"classification\":{\"predictions\":[{\"roi_name\":\"Body\",\"predicted_class\":\"pass\"}]}},\"cam_top_1\":{\"view\":\"top\",\"carrier_id\":\"CARRIER-TEST-001\",\"inspection_time\":\"2026-08-06T17:30:01.000Z\",\"pass_fail\":\"pass\",\"image_url\":\"http://192.168.11.50/images/pos1_top.jpg\",\"ip_mezzanine\":\"192.168.11.50\",\"capture_id\":\"cap-pos1-top\",\"classification\":{\"predictions\":[{\"roi_name\":\"Weld_Left\",\"predicted_class\":\"pass\"},{\"roi_name\":\"Weld_Right\",\"predicted_class\":\"pass\"}]},\"metadata\":{\"1_Weld_Left_Top_Gap_Greater_Than_005\":\"pass (0.123mm)\",\"1_Weld_Right_Top_Gap_Greater_Than_005\":\"pass (0.118mm)\",\"1_All_Gaps\":\"pass (0.455mm)\",\"1_IMLA_to_Foil\":\"pass (0.210mm)\"}}},\"2\":{\"cam_bottom_2\":{\"view\":\"bottom\",\"carrier_id\":\"CARRIER-TEST-001\",\"inspection_time\":\"2026-08-06T17:30:02.000Z\",\"pass_fail\":\"fail\",\"image_url\":\"http://192.168.11.50/images/pos2_bottom.jpg\",\"ip_mezzanine\":\"192.168.11.50\",\"capture_id\":\"cap-pos2-bottom\",\"classification\":{\"predictions\":[{\"roi_name\":\"Weld_Left\",\"predicted_class\":\"fail_gap\"}]}},\"cam_top_2\":{\"view\":\"top\",\"carrier_id\":\"CARRIER-TEST-001\",\"inspection_time\":\"2026-08-06T17:30:03.000Z\",\"pass_fail\":\"fail\",\"image_url\":\"http://192.168.11.50/images/pos2_top.jpg\",\"ip_mezzanine\":\"192.168.11.50\",\"capture_id\":\"cap-pos2-top\",\"classification\":{\"predictions\":[{\"roi_name\":\"Weld_Right\",\"predicted_class\":\"fail_scratch\"}]},\"metadata\":{\"2_Weld_Left_Top_Gap_Greater_Than_005\":\"fail (-0.020mm)\",\"2_Weld_Right_Top_Gap_Greater_Than_005\":\"pass (0.090mm)\",\"2_All_Gaps\":\"fail (0.012mm)\",\"2_IMLA_to_Foil\":\"pass (0.200mm)\"}}}}",
+    "payloadType": "json",
+    "x": 220,
+    "y": 160,
+    "wires": [
+      [
+        "imla_test_setup_globals"
+      ]
+    ]
+  },
+  {
+    "id": "imla_test_setup_globals",
+    "type": "function",
+    "z": "imla_test_inject_tab",
+    "name": "setup test globals (SN/recipe/env)",
+    "func": "// Globals que usa pack_mes_v2_msg\nglobal.set('capture_metadata', {\n  slot1: 'SN-TEST-0001',\n  slot2: 'SN-TEST-0002',\n  slot3: 'SN-TEST-0003',\n  slot4: 'SN-TEST-0004',\n  slot5: 'SN-TEST-0005',\n  slot6: 'SN-TEST-0006',\n  slot7: 'SN-TEST-0007',\n  slot8: 'SN-TEST-0008'\n});\nglobal.set('recipe_version', 'recipe-test-1.0');\n\n// Si tus env vars de Node-RED no están definidas, pack usará defaults.\n// En el nodo pack ya tienes MES_BASE_URL apuntando a /api/inspections.\n\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 520,
+    "y": 160,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "imla_test_comment",
+    "type": "comment",
+    "z": "imla_test_inject_tab",
+    "name": "Conectar la salida de 'setup test globals' → pack_mes_v2_msg → HTTP request",
+    "info": "1) Importa este flow\n2) Arrastra un cable desde 'setup test globals' a tu nodo pack_mes_v2_msg\n3) Asegura que pack apunte a http://host.docker.internal:3100/api/inspections o http://localhost:3100/api/inspections\n4) Click en el inject\n5) Revisa http://localhost:3100",
+    "x": 430,
+    "y": 80,
+    "wires": []
+  }
+]
