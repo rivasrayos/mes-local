@@ -1,10 +1,9 @@
-# MES IMLA (mes-local)
+# MES Local (mes-local)
 
-MES local para resultados de inspección **IMLA AOI**.
+MES local con home para elegir **IMLA** o **EOL**.
 
-Recibe el POST de Node-RED (`pack_mes_v2_msg`), guarda en PostgreSQL y muestra un dashboard web multi-línea (L1, L2, … sin límite).
-
-> Este repo es **solo IMLA**. EOL será otro proyecto aparte.
+- **IMLA**: recibe el POST de Node-RED (`pack_mes_v2_msg`), guarda en PostgreSQL y muestra dashboard multi-línea.
+- **EOL**: sección separada en la UI (en construcción; estructura de datos distinta a IMLA).
 
 ## Qué incluye
 

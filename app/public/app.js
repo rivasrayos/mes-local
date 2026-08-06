@@ -9,25 +9,68 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 
+/**
+ * Routes:
+ *  #/                product home
+ *  #/imla            IMLA lines home
+ *  #/imla/line/L12   IMLA line page
+ *  #/eol             EOL home
+ *  legacy #/line/X   → #/imla/line/X
+ */
 function getRoute() {
-  const raw = (location.hash || '#/').replace(/^#/, '') || '/';
-  const m = raw.match(/^\/?line\/([^/]+)\/?$/i);
-  if (m) {
-    return { page: 'line', line: decodeURIComponent(m[1]) };
-  }
-  return { page: 'home', line: '' };
+  let raw = (location.hash || '#/').replace(/^#/, '') || '/';
+  if (!raw.startsWith('/')) raw = `/${raw}`;
+
+  // legacy redirect handled in ensureRoute
+  let m = raw.match(/^\/imla\/line\/([^/]+)\/?$/i);
+  if (m) return { product: 'imla', page: 'line', line: decodeURIComponent(m[1]) };
+
+  if (/^\/imla\/?$/i.test(raw)) return { product: 'imla', page: 'home', line: '' };
+  if (/^\/eol\/?$/i.test(raw)) return { product: 'eol', page: 'home', line: '' };
+
+  m = raw.match(/^\/line\/([^/]+)\/?$/i);
+  if (m) return { product: 'imla', page: 'line', line: decodeURIComponent(m[1]), legacy: true };
+
+  return { product: 'home', page: 'home', line: '' };
 }
 
 function currentLine() {
-  return getRoute().line || '';
+  const r = getRoute();
+  return r.product === 'imla' ? (r.line || '') : '';
 }
 
-function goHome() {
+function goProductHome() {
   location.hash = '#/';
 }
 
+function goImlaHome() {
+  location.hash = '#/imla';
+}
+
 function goLine(line) {
-  location.hash = `#/line/${encodeURIComponent(line)}`;
+  location.hash = `#/imla/line/${encodeURIComponent(line)}`;
+}
+
+function goEol() {
+  location.hash = '#/eol';
+}
+
+function ensureRoute() {
+  const r = getRoute();
+  if (r.legacy && r.line) {
+    location.replace(`#/imla/line/${encodeURIComponent(r.line)}`);
+    return false;
+  }
+  if (!location.hash || location.hash === '#' || location.hash === '#/') {
+    // keep #/
+  }
+  return true;
+}
+
+function showView(viewId) {
+  ['view-home', 'view-imla', 'view-eol'].forEach((id) => {
+    $(id).classList.toggle('hidden', id !== viewId);
+  });
 }
 
 function qs(extra = {}) {
@@ -75,24 +118,38 @@ function makeChart(id, config) {
 
 function updatePageChrome() {
   const route = getRoute();
-  const backBtn = $('backHomeBtn');
-  const isLine = route.page === 'line';
 
-  backBtn.classList.toggle('hidden', !isLine);
+  if (route.product === 'home') {
+    showView('view-home');
+    document.title = 'MES Local — Inspection';
+    return;
+  }
+
+  if (route.product === 'eol') {
+    showView('view-eol');
+    document.title = 'MES EOL';
+    return;
+  }
+
+  showView('view-imla');
+  const isLine = route.page === 'line';
   document.body.classList.toggle('page-line', isLine);
   document.body.classList.toggle('page-home', !isLine);
 
   $('homeCharts').classList.toggle('hidden', isLine);
   $('lineCharts').classList.toggle('hidden', !isLine);
 
+  const backBtn = $('backBtn');
   if (isLine) {
-    $('pageEyebrow').textContent = 'Página de línea';
+    backBtn.textContent = '← Todas las líneas';
+    $('pageEyebrow').textContent = 'IMLA · Página de línea';
     $('pageTitle').textContent = `Línea ${route.line}`;
     document.title = `MES IMLA — ${route.line}`;
   } else {
-    $('pageEyebrow').textContent = 'Vista principal';
+    backBtn.textContent = '← MES Local';
+    $('pageEyebrow').textContent = 'IMLA';
     $('pageTitle').textContent = 'Todas las líneas';
-    document.title = 'MES IMLA — Inspection';
+    document.title = 'MES IMLA';
   }
 }
 
@@ -145,9 +202,8 @@ function renderHomeLines(byLine = []) {
   `).join('');
 
   $('kpiRow').querySelectorAll('[data-line]').forEach((el) => {
-    el.addEventListener('click', (e) => {
-      // Avoid double-handling when clicking the button inside the card
-      const line = el.dataset.line || e.currentTarget.dataset.line;
+    el.addEventListener('click', () => {
+      const line = el.dataset.line;
       if (line) goLine(line);
     });
   });
@@ -265,6 +321,8 @@ function renderLineCharts(data) {
 async function loadDashboard() {
   updatePageChrome();
   const route = getRoute();
+  if (route.product !== 'imla') return;
+
   const data = await api(`/api/dashboard?${qs()}`);
 
   if (route.page === 'line') {
@@ -274,10 +332,10 @@ async function loadDashboard() {
   } else {
     renderHomeLines(data.byLine);
     renderHomeLineChart(data.byLine);
-    $('windowMeta').textContent = `Principal · Ventana: ${data.window.range}${data.window.shift ? ` (${data.window.shift})` : ''} · ${data.window.from} → ${data.window.to}`;
+    $('windowMeta').textContent = `IMLA · Ventana: ${data.window.range}${data.window.shift ? ` (${data.window.shift})` : ''} · ${data.window.from} → ${data.window.to}`;
   }
 
-  document.querySelectorAll('.chart-block:not(.hidden) canvas, .charts-grid:not(.hidden) .chart-block canvas').forEach((c) => {
+  document.querySelectorAll('#view-imla .charts-grid:not(.hidden) .chart-block canvas').forEach((c) => {
     c.parentElement.style.height = '300px';
   });
 }
@@ -298,6 +356,8 @@ function filterExtras() {
 
 async function loadInspections() {
   updatePageChrome();
+  if (getRoute().product !== 'imla') return;
+
   const data = await api(`/api/inspections?${qs(filterExtras())}`);
   const tbody = document.querySelector('#inspTable tbody');
   tbody.innerHTML = data.items.map((item) => `
@@ -392,8 +452,14 @@ async function deleteHistory(payload) {
 }
 
 async function refreshAll() {
+  if (!ensureRoute()) return;
+  const route = getRoute();
+  updatePageChrome();
+
+  if (route.product === 'home' || route.product === 'eol') return;
+
   await loadLines();
-  const active = document.querySelector('.tab.active')?.dataset.tab;
+  const active = document.querySelector('#view-imla .tab.active')?.dataset.tab;
   if (active === 'inspections') await loadInspections();
   else if (active === 'admin') updatePageChrome();
   else await loadDashboard();
@@ -409,12 +475,24 @@ function wireUi() {
     refreshAll().catch(console.error);
   });
 
-  $('backHomeBtn').addEventListener('click', goHome);
+  document.querySelectorAll('.product-card[data-go]').forEach((card) => {
+    card.addEventListener('click', () => {
+      location.hash = card.dataset.go;
+    });
+  });
 
-  document.querySelectorAll('.tab').forEach((tab) => {
+  $('backBtn').addEventListener('click', () => {
+    const route = getRoute();
+    if (route.page === 'line') goImlaHome();
+    else goProductHome();
+  });
+
+  $('eolBackBtn').addEventListener('click', goProductHome);
+
+  document.querySelectorAll('#view-imla .tab').forEach((tab) => {
     tab.addEventListener('click', async () => {
-      document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
-      document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+      document.querySelectorAll('#view-imla .tab').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('#view-imla .panel').forEach((p) => p.classList.remove('active'));
       tab.classList.add('active');
       $(`tab-${tab.dataset.tab}`).classList.add('active');
       if (tab.dataset.tab === 'dashboard') await loadDashboard();
@@ -481,10 +559,14 @@ function wireUi() {
 wireUi();
 refreshAll().catch((err) => {
   console.error(err);
-  $('kpiRow').innerHTML = `<div class="kpi fail"><div class="label">Error</div><div class="value" style="font-size:1rem">${err.message}</div></div>`;
+  if ($('kpiRow')) {
+    $('kpiRow').innerHTML = `<div class="kpi fail"><div class="label">Error</div><div class="value" style="font-size:1rem">${err.message}</div></div>`;
+  }
 });
 
 setInterval(() => {
-  const active = document.querySelector('.tab.active')?.dataset.tab;
+  const route = getRoute();
+  if (route.product !== 'imla') return;
+  const active = document.querySelector('#view-imla .tab.active')?.dataset.tab;
   if (active === 'dashboard') loadDashboard().catch(console.error);
 }, 30000);

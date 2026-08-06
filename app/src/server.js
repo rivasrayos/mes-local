@@ -27,7 +27,7 @@ async function start() {
   // Fail fast if DB is unreachable
   await pool.query('SELECT 1');
   app.listen(config.port, '0.0.0.0', () => {
-    console.log(`MES IMLA listening on :${config.port}`);
+    console.log(`MES Local (IMLA/EOL) listening on :${config.port}`);
     console.log(`TZ=${config.tz} RESPONSE_ENABLED=${config.responseEnabled}`);
   });
 }

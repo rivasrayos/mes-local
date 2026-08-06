@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MES IMLA — Inspection</title>
+  <title>MES Local — Inspection</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -12,7 +12,34 @@
   <script src="/app.js" defer></script>
 </head>
 <body>
-  <div class="app">
+  <!-- HOME: elegir IMLA o EOL -->
+  <div id="view-home" class="app home-app">
+    <header class="top home-top">
+      <div class="brand-block">
+        <p class="eyebrow">Manufacturing Execution</p>
+        <h1>MES Local</h1>
+        <p class="sub">Elige el proceso de inspección</p>
+      </div>
+    </header>
+
+    <section class="product-picker">
+      <button type="button" class="product-card" data-go="#/imla">
+        <p class="product-kicker">Estación AOI</p>
+        <h2>IMLA</h2>
+        <p>Inspección IMLA · multi-línea · dashboard y CSV</p>
+        <span class="product-cta">Abrir IMLA →</span>
+      </button>
+      <button type="button" class="product-card eol" data-go="#/eol">
+        <p class="product-kicker">Estación final</p>
+        <h2>EOL</h2>
+        <p>End of Line · en construcción con su propio flujo</p>
+        <span class="product-cta">Abrir EOL →</span>
+      </button>
+    </section>
+  </div>
+
+  <!-- IMLA (igual que antes, con navegación propia) -->
+  <div id="view-imla" class="app hidden">
     <header class="top">
       <div class="brand-block">
         <p class="eyebrow">Manufacturing Execution</p>
@@ -40,9 +67,9 @@
     </header>
 
     <div id="pageBar" class="page-bar">
-      <button id="backHomeBtn" class="btn hidden" type="button">← Todas las líneas</button>
+      <button id="backBtn" class="btn" type="button">← Volver</button>
       <div class="page-title-wrap">
-        <p class="page-eyebrow" id="pageEyebrow">Vista principal</p>
+        <p class="page-eyebrow" id="pageEyebrow">IMLA</p>
         <h2 id="pageTitle">Todas las líneas</h2>
       </div>
     </div>
@@ -133,8 +160,8 @@
 
     <section id="tab-admin" class="panel">
       <article class="admin-card">
-        <h2>Borrar histórico</h2>
-        <p>Elimina batches e inspecciones. Esta acción no se puede deshacer.</p>
+        <h2>Borrar histórico IMLA</h2>
+        <p>Elimina batches e inspecciones IMLA. Esta acción no se puede deshacer.</p>
         <div class="admin-grid">
           <label class="field">
             <span>Borrar todo anterior a</span>
@@ -154,6 +181,41 @@
           <button id="deleteRangeBtn" class="btn btn-danger">Borrar rango</button>
         </div>
         <pre id="deleteResult" class="result"></pre>
+      </article>
+    </section>
+  </div>
+
+  <!-- EOL -->
+  <div id="view-eol" class="app hidden">
+    <header class="top">
+      <div class="brand-block">
+        <p class="eyebrow">Manufacturing Execution</p>
+        <h1>MES EOL</h1>
+        <p class="sub">End of Line · multi-línea</p>
+      </div>
+    </header>
+
+    <div class="page-bar">
+      <button id="eolBackBtn" class="btn" type="button">← MES Local</button>
+      <div class="page-title-wrap">
+        <p class="page-eyebrow">EOL</p>
+        <h2>Dashboard EOL</h2>
+      </div>
+    </div>
+
+    <section class="eol-shell">
+      <article class="eol-placeholder">
+        <h2>EOL listo para configurar</h2>
+        <p>
+          La navegación ya está separada de IMLA. El siguiente paso es definir el
+          payload de Node-RED de EOL (estructura distinta) para crear API, tablas y dashboard.
+        </p>
+        <ul>
+          <li>Home → IMLA o EOL</li>
+          <li>IMLA se mantiene igual</li>
+          <li>EOL tendrá su propio ingest y pantallas</li>
+        </ul>
+        <p class="eol-next">Pasa el nodo / formato de salida de EOL para continuar.</p>
       </article>
     </section>
   </div>
