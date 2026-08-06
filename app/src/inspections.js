@@ -247,7 +247,10 @@ async function getDashboard(q = {}) {
   const lineRes = await query(
     `SELECT COALESCE(NULLIF(line_number, ''), '(blank)') AS line_number,
             COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'fail')::int AS fail_count
+            COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'pass')::int AS pass_count,
+            COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'fail')::int AS fail_count,
+            COUNT(DISTINCT sn) FILTER (WHERE sn IS NOT NULL AND sn <> '')::int AS unique_sns,
+            COUNT(DISTINCT carrier_sn) FILTER (WHERE carrier_sn IS NOT NULL AND carrier_sn <> '')::int AS unique_carriers
      FROM inspections
      ${whereSql}
      GROUP BY 1
@@ -298,12 +301,21 @@ async function getDashboard(q = {}) {
     })),
     defects: defectRes.rows,
     weldingOnFail: weldRes.rows,
-    byLine: lineRes.rows.map((r) => ({
-      lineNumber: r.line_number,
-      total: r.total,
-      failCount: r.fail_count,
-      failRate: r.total ? (r.fail_count / r.total) * 100 : 0,
-    })),
+    byLine: lineRes.rows.map((r) => {
+      const total = r.total || 0;
+      const passCount = r.pass_count || 0;
+      const failCount = r.fail_count || 0;
+      return {
+        lineNumber: r.line_number,
+        total,
+        passCount,
+        failCount,
+        passRate: total ? (passCount / total) * 100 : 0,
+        failRate: total ? (failCount / total) * 100 : 0,
+        uniqueSns: r.unique_sns || 0,
+        uniqueCarriers: r.unique_carriers || 0,
+      };
+    }),
     parameters: paramSeries,
   };
 }

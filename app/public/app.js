@@ -60,7 +60,7 @@ async function loadLines() {
   const data = await api('/api/lines');
   const sel = $('lineSelect');
   const current = sel.value;
-  sel.innerHTML = '<option value="">Todas</option>';
+  sel.innerHTML = '<option value="">Todas (por línea)</option>';
   data.lines.forEach((line) => {
     const opt = document.createElement('option');
     opt.value = line;
@@ -70,8 +70,8 @@ async function loadLines() {
   sel.value = current;
 }
 
-function renderKpis(summary) {
-  const items = [
+function kpiItems(summary) {
+  return [
     { label: 'Total', value: summary.total },
     { label: 'Pass', value: summary.passCount, cls: 'pass' },
     { label: 'Fail', value: summary.failCount, cls: 'fail' },
@@ -80,7 +80,10 @@ function renderKpis(summary) {
     { label: 'SN únicos', value: summary.uniqueSns },
     { label: 'Carriers', value: summary.uniqueCarriers },
   ];
-  $('kpiRow').innerHTML = items.map((i) => `
+}
+
+function renderKpiCards(summary) {
+  return kpiItems(summary).map((i) => `
     <div class="kpi ${i.cls || ''}">
       <div class="label">${i.label}</div>
       <div class="value">${i.value}</div>
@@ -88,10 +91,52 @@ function renderKpis(summary) {
   `).join('');
 }
 
+function renderKpis(summary) {
+  $('kpiRow').innerHTML = renderKpiCards(summary);
+}
+
+function renderKpisByLine(byLine = []) {
+  if (!byLine.length) {
+    $('kpiRow').innerHTML = '<div class="kpi"><div class="label">Sin datos</div><div class="value">0</div></div>';
+    return;
+  }
+
+  const sorted = [...byLine].sort((a, b) =>
+    String(a.lineNumber).localeCompare(String(b.lineNumber), undefined, { numeric: true })
+  );
+
+  $('kpiRow').innerHTML = sorted.map((line) => `
+    <section class="line-kpi-block">
+      <header class="line-kpi-header">
+        <h3>${line.lineNumber}</h3>
+        <button type="button" class="btn btn-line" data-line="${line.lineNumber}">Ver línea</button>
+      </header>
+      <div class="kpi-row nested">
+        ${renderKpiCards(line)}
+      </div>
+    </section>
+  `).join('');
+
+  $('kpiRow').querySelectorAll('button[data-line]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $('lineSelect').value = btn.dataset.line;
+      refreshAll();
+    });
+  });
+}
+
 async function loadDashboard() {
+  const selectedLine = $('lineSelect').value;
   const data = await api(`/api/dashboard?${qs()}`);
-  renderKpis(data.summary);
-  $('windowMeta').textContent = `Ventana: ${data.window.range}${data.window.shift ? ` (${data.window.shift})` : ''} · ${data.window.from} → ${data.window.to}`;
+
+  if (selectedLine) {
+    renderKpis(data.summary);
+  } else {
+    // No mezclar totales globales: una sección KPI por línea
+    renderKpisByLine(data.byLine);
+  }
+
+  $('windowMeta').textContent = `Ventana: ${data.window.range}${data.window.shift ? ` (${data.window.shift})` : ''} · ${data.window.from} → ${data.window.to}${selectedLine ? ` · línea ${selectedLine}` : ' · KPIs por línea'}`;
 
   const labels = data.trend.map((t) => String(t.bucket).slice(5, 16).replace('T', ' '));
   makeChart('trendChart', {
@@ -139,7 +184,9 @@ async function loadDashboard() {
       datasets: [
         {
           label: 'Pass',
-          data: data.byLine.map((l) => Math.max(0, (l.total || 0) - (l.failCount || 0))),
+          data: data.byLine.map((l) => l.passCount != null
+            ? l.passCount
+            : Math.max(0, (l.total || 0) - (l.failCount || 0))),
           backgroundColor: '#0f6e7c',
           stack: 'line',
         },

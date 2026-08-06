@@ -176,6 +176,46 @@ select, input {
   margin-bottom: 1rem;
 }
 
+.kpi-row:has(.line-kpi-block) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.line-kpi-block {
+  background: var(--panel);
+  border: 1px solid rgba(197, 208, 217, 0.8);
+  border-radius: 14px;
+  padding: 0.85rem;
+  box-shadow: var(--shadow);
+}
+
+.line-kpi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+
+.line-kpi-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+.btn-line {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
+}
+
+.kpi-row.nested {
+  margin-bottom: 0;
+}
+
 .kpi {
   background: var(--panel);
   border: 1px solid rgba(197, 208, 217, 0.8);
