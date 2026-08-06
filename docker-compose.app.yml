@@ -1,0 +1,24 @@
+services:
+  app:
+    build:
+      context: ./app
+    container_name: mes-imla-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3100}:3100"
+    env_file:
+      - .env
+    environment:
+      PORT: 3100
+      DATABASE_URL: ${DATABASE_URL:-postgres://mes:mes_secret_change_me@postgres:5432/mes_imla}
+      TZ: ${TZ:-America/Los_Angeles}
+      RESPONSE_ENABLED: ${RESPONSE_ENABLED:-true}
+      RESPONSE_BODY: ${RESPONSE_BODY:-{"ok":true,"received":{{received}}} }
+    networks:
+      - mes-imla-net
+    depends_on: []
+
+networks:
+  mes-imla-net:
+    name: mes-imla-net
+    external: true

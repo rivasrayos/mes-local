@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MES IMLA — Inspection</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand-block">
+        <p class="eyebrow">Manufacturing Execution</p>
+        <h1>MES IMLA</h1>
+        <p class="sub">Inspección AOI · multi-línea · turnos 06:00 / 18:00</p>
+      </div>
+      <div class="top-actions">
+        <label class="field inline">
+          <span>Línea</span>
+          <select id="lineSelect">
+            <option value="">Todas</option>
+          </select>
+        </label>
+        <label class="field inline">
+          <span>Ventana</span>
+          <select id="rangeSelect">
+            <option value="shift">Turno actual</option>
+            <option value="24h" selected>24 horas</option>
+            <option value="8h">8 horas</option>
+            <option value="7d">7 días</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <div id="customRange" class="custom-range hidden">
+          <input type="datetime-local" id="fromInput" />
+          <input type="datetime-local" id="toInput" />
+        </div>
+        <button id="refreshBtn" class="btn">Actualizar</button>
+        <button id="exportBtn" class="btn btn-accent">CSV</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="dashboard">Dashboard</button>
+      <button class="tab" data-tab="inspections">Inspecciones</button>
+      <button class="tab" data-tab="admin">Historial</button>
+    </nav>
+
+    <section id="tab-dashboard" class="panel active">
+      <div class="kpi-row" id="kpiRow"></div>
+      <div class="charts-grid">
+        <article class="chart-block">
+          <h2>Tendencia Pass / Fail</h2>
+          <canvas id="trendChart"></canvas>
+        </article>
+        <article class="chart-block">
+          <h2>Top defectos</h2>
+          <canvas id="defectChart"></canvas>
+        </article>
+        <article class="chart-block">
+          <h2>Soldadura en Fail (L / R / L/R / NA)</h2>
+          <canvas id="weldChart"></canvas>
+        </article>
+        <article class="chart-block">
+          <h2>Por línea</h2>
+          <canvas id="lineChart"></canvas>
+        </article>
+        <article class="chart-block wide">
+          <h2>Parámetros (promedio por hora)</h2>
+          <canvas id="paramChart"></canvas>
+        </article>
+      </div>
+      <p class="window-meta" id="windowMeta"></p>
+    </section>
+
+    <section id="tab-inspections" class="panel">
+      <div class="filters">
+        <input id="fSn" placeholder="SN" />
+        <input id="fCarrier" placeholder="Carrier SN" />
+        <input id="fSlot" placeholder="Slot" />
+        <select id="fPassFail">
+          <option value="">Pass/Fail</option>
+          <option value="Pass">Pass</option>
+          <option value="Fail">Fail</option>
+        </select>
+        <input id="fDefect" placeholder="Defect type" />
+        <input id="fStation" placeholder="Station" />
+        <select id="fWeld">
+          <option value="">Welding</option>
+          <option value="L">L</option>
+          <option value="R">R</option>
+          <option value="L/R">L/R</option>
+          <option value="NA">NA</option>
+        </select>
+        <button id="applyFilters" class="btn">Filtrar</button>
+      </div>
+      <div class="table-wrap">
+        <table id="inspTable">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Line</th>
+              <th>SN</th>
+              <th>Carrier</th>
+              <th>Slot</th>
+              <th>Result</th>
+              <th>Defects</th>
+              <th>Weld</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <span id="pageInfo"></span>
+        <button id="prevPage" class="btn">Anterior</button>
+        <button id="nextPage" class="btn">Siguiente</button>
+      </div>
+    </section>
+
+    <section id="tab-admin" class="panel">
+      <article class="admin-card">
+        <h2>Borrar histórico</h2>
+        <p>Elimina batches e inspecciones. Esta acción no se puede deshacer.</p>
+        <div class="admin-grid">
+          <label class="field">
+            <span>Borrar todo anterior a</span>
+            <input type="datetime-local" id="deleteBefore" />
+          </label>
+          <button id="deleteBeforeBtn" class="btn btn-danger">Borrar anterior a fecha</button>
+        </div>
+        <div class="admin-grid">
+          <label class="field">
+            <span>Desde</span>
+            <input type="datetime-local" id="deleteFrom" />
+          </label>
+          <label class="field">
+            <span>Hasta</span>
+            <input type="datetime-local" id="deleteTo" />
+          </label>
+          <button id="deleteRangeBtn" class="btn btn-danger">Borrar rango</button>
+        </div>
+        <pre id="deleteResult" class="result"></pre>
+      </article>
+    </section>
+  </div>
+
+  <aside id="drawer" class="drawer hidden" aria-hidden="true">
+    <div class="drawer-panel">
+      <header>
+        <h2>Detalle inspección</h2>
+        <button id="closeDrawer" class="btn">Cerrar</button>
+      </header>
+      <div id="drawerBody"></div>
+    </div>
+  </aside>
+</body>
+</html>

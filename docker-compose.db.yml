@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mes-imla-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mes}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mes_secret_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-mes_imla}
+      TZ: ${TZ:-America/Los_Angeles}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - mes-imla-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mes} -d ${POSTGRES_DB:-mes_imla}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+networks:
+  mes-imla-net:
+    name: mes-imla-net
