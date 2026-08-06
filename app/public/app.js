@@ -4,13 +4,35 @@ const state = {
   offset: 0,
   limit: 50,
   charts: {},
+  lines: [],
 };
 
 const $ = (id) => document.getElementById(id);
 
+function getRoute() {
+  const raw = (location.hash || '#/').replace(/^#/, '') || '/';
+  const m = raw.match(/^\/?line\/([^/]+)\/?$/i);
+  if (m) {
+    return { page: 'line', line: decodeURIComponent(m[1]) };
+  }
+  return { page: 'home', line: '' };
+}
+
+function currentLine() {
+  return getRoute().line || '';
+}
+
+function goHome() {
+  location.hash = '#/';
+}
+
+function goLine(line) {
+  location.hash = `#/line/${encodeURIComponent(line)}`;
+}
+
 function qs(extra = {}) {
   const params = new URLSearchParams();
-  const line = $('lineSelect').value;
+  const line = currentLine();
   const range = $('rangeSelect').value;
 
   if (line) params.set('lineNumber', line);
@@ -18,8 +40,8 @@ function qs(extra = {}) {
   if (range === 'custom') {
     const from = $('fromInput').value;
     const to = $('toInput').value;
-    if (from) params.set('from', from.replace('T', ' ') + ':00');
-    if (to) params.set('to', to.replace('T', ' ') + ':00');
+    if (from) params.set('from', `${from.replace('T', ' ')}:00`);
+    if (to) params.set('to', `${to.replace('T', ' ')}:00`);
   } else {
     params.set('range', range);
   }
@@ -44,11 +66,6 @@ function fmtPct(n) {
   return `${(n || 0).toFixed(1)}%`;
 }
 
-function destroyCharts() {
-  Object.values(state.charts).forEach((c) => c.destroy());
-  state.charts = {};
-}
-
 function makeChart(id, config) {
   const ctx = $(id);
   if (!ctx) return;
@@ -56,18 +73,32 @@ function makeChart(id, config) {
   state.charts[id] = new Chart(ctx, config);
 }
 
+function updatePageChrome() {
+  const route = getRoute();
+  const backBtn = $('backHomeBtn');
+  const isLine = route.page === 'line';
+
+  backBtn.classList.toggle('hidden', !isLine);
+  document.body.classList.toggle('page-line', isLine);
+  document.body.classList.toggle('page-home', !isLine);
+
+  $('homeCharts').classList.toggle('hidden', isLine);
+  $('lineCharts').classList.toggle('hidden', !isLine);
+
+  if (isLine) {
+    $('pageEyebrow').textContent = 'Página de línea';
+    $('pageTitle').textContent = `Línea ${route.line}`;
+    document.title = `MES IMLA — ${route.line}`;
+  } else {
+    $('pageEyebrow').textContent = 'Vista principal';
+    $('pageTitle').textContent = 'Todas las líneas';
+    document.title = 'MES IMLA — Inspection';
+  }
+}
+
 async function loadLines() {
   const data = await api('/api/lines');
-  const sel = $('lineSelect');
-  const current = sel.value;
-  sel.innerHTML = '<option value="">Todas (por línea)</option>';
-  data.lines.forEach((line) => {
-    const opt = document.createElement('option');
-    opt.value = line;
-    opt.textContent = line;
-    sel.appendChild(opt);
-  });
-  sel.value = current;
+  state.lines = data.lines || [];
 }
 
 function kpiItems(summary) {
@@ -91,11 +122,7 @@ function renderKpiCards(summary) {
   `).join('');
 }
 
-function renderKpis(summary) {
-  $('kpiRow').innerHTML = renderKpiCards(summary);
-}
-
-function renderKpisByLine(byLine = []) {
+function renderHomeLines(byLine = []) {
   if (!byLine.length) {
     $('kpiRow').innerHTML = '<div class="kpi"><div class="label">Sin datos</div><div class="value">0</div></div>';
     return;
@@ -106,10 +133,10 @@ function renderKpisByLine(byLine = []) {
   );
 
   $('kpiRow').innerHTML = sorted.map((line) => `
-    <section class="line-kpi-block">
+    <section class="line-kpi-block clickable" data-line="${line.lineNumber}">
       <header class="line-kpi-header">
         <h3>${line.lineNumber}</h3>
-        <button type="button" class="btn btn-line" data-line="${line.lineNumber}">Ver línea</button>
+        <button type="button" class="btn btn-line" data-line="${line.lineNumber}">Abrir línea</button>
       </header>
       <div class="kpi-row nested">
         ${renderKpiCards(line)}
@@ -117,27 +144,64 @@ function renderKpisByLine(byLine = []) {
     </section>
   `).join('');
 
-  $('kpiRow').querySelectorAll('button[data-line]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      $('lineSelect').value = btn.dataset.line;
-      refreshAll();
+  $('kpiRow').querySelectorAll('[data-line]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      // Avoid double-handling when clicking the button inside the card
+      const line = el.dataset.line || e.currentTarget.dataset.line;
+      if (line) goLine(line);
     });
   });
 }
 
-async function loadDashboard() {
-  const selectedLine = $('lineSelect').value;
-  const data = await api(`/api/dashboard?${qs()}`);
+function renderLineKpis(summary) {
+  $('kpiRow').innerHTML = `
+    <section class="line-kpi-block current">
+      <div class="kpi-row nested">
+        ${renderKpiCards(summary)}
+      </div>
+    </section>
+  `;
+}
 
-  if (selectedLine) {
-    renderKpis(data.summary);
-  } else {
-    // No mezclar totales globales: una sección KPI por línea
-    renderKpisByLine(data.byLine);
-  }
+function renderHomeLineChart(byLine = []) {
+  makeChart('lineChart', {
+    type: 'bar',
+    data: {
+      labels: byLine.map((l) => l.lineNumber),
+      datasets: [
+        {
+          label: 'Pass',
+          data: byLine.map((l) => l.passCount ?? Math.max(0, (l.total || 0) - (l.failCount || 0))),
+          backgroundColor: '#0f6e7c',
+          stack: 'line',
+        },
+        {
+          label: 'Fail',
+          data: byLine.map((l) => l.failCount || 0),
+          backgroundColor: '#b42318',
+          stack: 'line',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: (_evt, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const line = byLine[idx]?.lineNumber;
+        if (line && line !== '(blank)') goLine(line);
+      },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, beginAtZero: true },
+      },
+      plugins: { legend: { position: 'bottom' } },
+    },
+  });
+}
 
-  $('windowMeta').textContent = `Ventana: ${data.window.range}${data.window.shift ? ` (${data.window.shift})` : ''} · ${data.window.from} → ${data.window.to}${selectedLine ? ` · línea ${selectedLine}` : ' · KPIs por línea'}`;
-
+function renderLineCharts(data) {
   const labels = data.trend.map((t) => String(t.bucket).slice(5, 16).replace('T', ' '));
   makeChart('trendChart', {
     type: 'line',
@@ -177,38 +241,6 @@ async function loadDashboard() {
     options: { responsive: true, maintainAspectRatio: false },
   });
 
-  makeChart('lineChart', {
-    type: 'bar',
-    data: {
-      labels: data.byLine.map((l) => l.lineNumber),
-      datasets: [
-        {
-          label: 'Pass',
-          data: data.byLine.map((l) => l.passCount != null
-            ? l.passCount
-            : Math.max(0, (l.total || 0) - (l.failCount || 0))),
-          backgroundColor: '#0f6e7c',
-          stack: 'line',
-        },
-        {
-          label: 'Fail',
-          data: data.byLine.map((l) => l.failCount || 0),
-          backgroundColor: '#b42318',
-          stack: 'line',
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { stacked: true },
-        y: { stacked: true, beginAtZero: true },
-      },
-      plugins: { legend: { position: 'bottom' } },
-    },
-  });
-
   const paramNames = Object.keys(data.parameters || {});
   const first = paramNames[0] ? data.parameters[paramNames[0]] : [];
   makeChart('paramChart', {
@@ -228,8 +260,24 @@ async function loadDashboard() {
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
   });
+}
 
-  document.querySelectorAll('.chart-block canvas').forEach((c) => {
+async function loadDashboard() {
+  updatePageChrome();
+  const route = getRoute();
+  const data = await api(`/api/dashboard?${qs()}`);
+
+  if (route.page === 'line') {
+    renderLineKpis(data.summary);
+    renderLineCharts(data);
+    $('windowMeta').textContent = `Línea ${route.line} · Ventana: ${data.window.range}${data.window.shift ? ` (${data.window.shift})` : ''} · ${data.window.from} → ${data.window.to}`;
+  } else {
+    renderHomeLines(data.byLine);
+    renderHomeLineChart(data.byLine);
+    $('windowMeta').textContent = `Principal · Ventana: ${data.window.range}${data.window.shift ? ` (${data.window.shift})` : ''} · ${data.window.from} → ${data.window.to}`;
+  }
+
+  document.querySelectorAll('.chart-block:not(.hidden) canvas, .charts-grid:not(.hidden) .chart-block canvas').forEach((c) => {
     c.parentElement.style.height = '300px';
   });
 }
@@ -249,6 +297,7 @@ function filterExtras() {
 }
 
 async function loadInspections() {
+  updatePageChrome();
   const data = await api(`/api/inspections?${qs(filterExtras())}`);
   const tbody = document.querySelector('#inspTable tbody');
   tbody.innerHTML = data.items.map((item) => `
@@ -346,10 +395,22 @@ async function refreshAll() {
   await loadLines();
   const active = document.querySelector('.tab.active')?.dataset.tab;
   if (active === 'inspections') await loadInspections();
+  else if (active === 'admin') updatePageChrome();
   else await loadDashboard();
 }
 
 function wireUi() {
+  if (!location.hash || location.hash === '#') {
+    location.hash = '#/';
+  }
+
+  window.addEventListener('hashchange', () => {
+    state.offset = 0;
+    refreshAll().catch(console.error);
+  });
+
+  $('backHomeBtn').addEventListener('click', goHome);
+
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', async () => {
       document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
@@ -358,6 +419,7 @@ function wireUi() {
       $(`tab-${tab.dataset.tab}`).classList.add('active');
       if (tab.dataset.tab === 'dashboard') await loadDashboard();
       if (tab.dataset.tab === 'inspections') await loadInspections();
+      if (tab.dataset.tab === 'admin') updatePageChrome();
     });
   });
 
@@ -402,8 +464,8 @@ function wireUi() {
     if (!from || !to) return alert('Elige desde y hasta');
     try {
       await deleteHistory({
-        from: from.replace('T', ' ') + ':00',
-        to: to.replace('T', ' ') + ':00',
+        from: `${from.replace('T', ' ')}:00`,
+        to: `${to.replace('T', ' ')}:00`,
       });
     } catch (err) {
       alert(err.message);

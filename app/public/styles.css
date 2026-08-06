@@ -140,6 +140,39 @@ select, input {
 
 .hidden { display: none !important; }
 
+.page-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.4rem 0 0.2rem;
+  min-height: 3rem;
+}
+
+.page-title-wrap h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  letter-spacing: -0.02em;
+}
+
+.page-eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+.line-kpi-block.clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.line-kpi-block.clickable:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
 .tabs {
   display: flex;
   gap: 0.4rem;

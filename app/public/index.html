@@ -21,12 +21,6 @@
       </div>
       <div class="top-actions">
         <label class="field inline">
-          <span>Línea</span>
-          <select id="lineSelect">
-            <option value="">Todas</option>
-          </select>
-        </label>
-        <label class="field inline">
           <span>Ventana</span>
           <select id="rangeSelect">
             <option value="shift">Turno actual</option>
@@ -45,6 +39,14 @@
       </div>
     </header>
 
+    <div id="pageBar" class="page-bar">
+      <button id="backHomeBtn" class="btn hidden" type="button">← Todas las líneas</button>
+      <div class="page-title-wrap">
+        <p class="page-eyebrow" id="pageEyebrow">Vista principal</p>
+        <h2 id="pageTitle">Todas las líneas</h2>
+      </div>
+    </div>
+
     <nav class="tabs">
       <button class="tab active" data-tab="dashboard">Dashboard</button>
       <button class="tab" data-tab="inspections">Inspecciones</button>
@@ -53,7 +55,15 @@
 
     <section id="tab-dashboard" class="panel active">
       <div class="kpi-row" id="kpiRow"></div>
-      <div class="charts-grid">
+
+      <div id="homeCharts" class="charts-grid">
+        <article class="chart-block wide">
+          <h2>Comparativa por línea (Pass + Fail)</h2>
+          <canvas id="lineChart"></canvas>
+        </article>
+      </div>
+
+      <div id="lineCharts" class="charts-grid hidden">
         <article class="chart-block">
           <h2>Tendencia Pass / Fail</h2>
           <canvas id="trendChart"></canvas>
@@ -66,15 +76,12 @@
           <h2>Soldadura en Fail (L / R / L/R / NA)</h2>
           <canvas id="weldChart"></canvas>
         </article>
-        <article class="chart-block">
-          <h2>Por línea (Pass + Fail)</h2>
-          <canvas id="lineChart"></canvas>
-        </article>
         <article class="chart-block wide">
           <h2>Parámetros (promedio por hora)</h2>
           <canvas id="paramChart"></canvas>
         </article>
       </div>
+
       <p class="window-meta" id="windowMeta"></p>
     </section>
 
