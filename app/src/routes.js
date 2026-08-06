@@ -39,7 +39,7 @@ router.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'mes-imla', tz: config.tz });
 });
 
-router.post('/inspections', async (req, res, next) => {
+async function handleIngest(req, res, next) {
   try {
     const result = await ingestBatch(req.body);
     const body = buildNodeRedResponse(result.received);
@@ -50,7 +50,12 @@ router.post('/inspections', async (req, res, next) => {
   } catch (err) {
     return next(err);
   }
-});
+}
+
+// Canonical ingest path used by Node-RED MES_BASE_URL
+router.post('/inspections', handleIngest);
+// Compatibility alias when pack_mes_v2_msg still appends the old MES suffix
+router.post('/inspections/produce/passstation/batchQCProcess', handleIngest);
 
 router.get('/lines', async (_req, res, next) => {
   try {
