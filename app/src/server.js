@@ -2,6 +2,7 @@ const path = require('path');
 const express = require('express');
 const config = require('./config');
 const { pool } = require('./db');
+const { ensureSchema } = require('./ensureSchema');
 const routes = require('./routes');
 
 const app = express();
@@ -24,8 +25,8 @@ app.use((err, _req, res, _next) => {
 });
 
 async function start() {
-  // Fail fast if DB is unreachable
   await pool.query('SELECT 1');
+  await ensureSchema();
   app.listen(config.port, '0.0.0.0', () => {
     console.log(`MES Local (IMLA/EOL) listening on :${config.port}`);
     console.log(`TZ=${config.tz} RESPONSE_ENABLED=${config.responseEnabled}`);

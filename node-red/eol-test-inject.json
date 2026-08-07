@@ -1,0 +1,85 @@
+[
+  {
+    "id": "eol_test_tab",
+    "type": "tab",
+    "label": "EOL MES test",
+    "disabled": false,
+    "info": "Inject → HTTP POST http://localhost:3100/api/eol/inspections"
+  },
+  {
+    "id": "eol_test_inject",
+    "type": "inject",
+    "z": "eol_test_tab",
+    "name": "Fake EOL Pass L12",
+    "props": [
+      { "p": "payload" },
+      { "p": "topic", "vt": "str" }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "eol-test",
+    "payload": "{\"lineNumber\":\"L12\",\"stationName\":\"EOL TIP\",\"stageName\":\"LEG\",\"workStationCode\":\"\",\"SN\":\"331210830804261700716401\",\"inspectionTime\":\"2026-8-5 08:51:45\",\"passFail\":\"Pass\",\"defectType\":\"\",\"imageUrls\":[]}",
+    "payloadType": "json",
+    "x": 200,
+    "y": 140,
+    "wires": [["eol_test_http"]]
+  },
+  {
+    "id": "eol_test_inject_fail",
+    "type": "inject",
+    "z": "eol_test_tab",
+    "name": "Fake EOL Fail L12",
+    "props": [
+      { "p": "payload" }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"lineNumber\":\"L12\",\"stationName\":\"EOL TIP\",\"stageName\":\"LEG\",\"workStationCode\":\"\",\"SN\":\"331210830804261700716402\",\"inspectionTime\":\"2026-8-5 09:10:12\",\"passFail\":\"Fail\",\"defectType\":\"scratch\",\"imageUrls\":[\"http://192.168.11.50/images/eol_fail.jpg\"]}",
+    "payloadType": "json",
+    "x": 200,
+    "y": 200,
+    "wires": [["eol_test_http"]]
+  },
+  {
+    "id": "eol_test_http",
+    "type": "http request",
+    "z": "eol_test_tab",
+    "name": "POST /api/eol/inspections",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://localhost:3100/api/eol/inspections",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 480,
+    "y": 170,
+    "wires": [["eol_test_debug"]]
+  },
+  {
+    "id": "eol_test_debug",
+    "type": "debug",
+    "z": "eol_test_tab",
+    "name": "EOL response",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 700,
+    "y": 170,
+    "wires": []
+  }
+]

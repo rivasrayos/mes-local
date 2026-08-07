@@ -32,7 +32,7 @@
       <button type="button" class="product-card eol" data-go="#/eol">
         <p class="product-kicker">Estación final</p>
         <h2>EOL</h2>
-        <p>End of Line · en construcción con su propio flujo</p>
+        <p>End of Line · multi-línea · dashboard y CSV</p>
         <span class="product-cta">Abrir EOL →</span>
       </button>
     </section>
@@ -191,31 +191,123 @@
       <div class="brand-block">
         <p class="eyebrow">Manufacturing Execution</p>
         <h1>MES EOL</h1>
-        <p class="sub">End of Line · multi-línea</p>
+        <p class="sub">End of Line · multi-línea · turnos 06:00 / 18:00</p>
+      </div>
+      <div class="top-actions">
+        <label class="field inline">
+          <span>Ventana</span>
+          <select id="eolRangeSelect">
+            <option value="shift">Turno actual</option>
+            <option value="24h" selected>24 horas</option>
+            <option value="8h">8 horas</option>
+            <option value="7d">7 días</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <div id="eolCustomRange" class="custom-range hidden">
+          <input type="datetime-local" id="eolFromInput" />
+          <input type="datetime-local" id="eolToInput" />
+        </div>
+        <button id="eolRefreshBtn" class="btn">Actualizar</button>
+        <button id="eolExportBtn" class="btn btn-accent">CSV</button>
       </div>
     </header>
 
     <div class="page-bar">
-      <button id="eolBackBtn" class="btn" type="button">← MES Local</button>
+      <button id="eolBackBtn" class="btn" type="button">← Volver</button>
       <div class="page-title-wrap">
-        <p class="page-eyebrow">EOL</p>
-        <h2>Dashboard EOL</h2>
+        <p class="page-eyebrow" id="eolPageEyebrow">EOL</p>
+        <h2 id="eolPageTitle">Todas las líneas</h2>
       </div>
     </div>
 
-    <section class="eol-shell">
-      <article class="eol-placeholder">
-        <h2>EOL listo para configurar</h2>
-        <p>
-          La navegación ya está separada de IMLA. El siguiente paso es definir el
-          payload de Node-RED de EOL (estructura distinta) para crear API, tablas y dashboard.
-        </p>
-        <ul>
-          <li>Home → IMLA o EOL</li>
-          <li>IMLA se mantiene igual</li>
-          <li>EOL tendrá su propio ingest y pantallas</li>
-        </ul>
-        <p class="eol-next">Pasa el nodo / formato de salida de EOL para continuar.</p>
+    <nav class="tabs">
+      <button class="tab active" data-eol-tab="dashboard">Dashboard</button>
+      <button class="tab" data-eol-tab="inspections">Inspecciones</button>
+      <button class="tab" data-eol-tab="admin">Historial</button>
+    </nav>
+
+    <section id="eol-tab-dashboard" class="panel active">
+      <div class="kpi-row" id="eolKpiRow"></div>
+      <div id="eolHomeCharts" class="charts-grid">
+        <article class="chart-block wide">
+          <h2>Comparativa por línea (Pass + Fail)</h2>
+          <canvas id="eolLineChart"></canvas>
+        </article>
+      </div>
+      <div id="eolLineCharts" class="charts-grid hidden">
+        <article class="chart-block">
+          <h2>Tendencia Pass / Fail</h2>
+          <canvas id="eolTrendChart"></canvas>
+        </article>
+        <article class="chart-block">
+          <h2>Top defectos</h2>
+          <canvas id="eolDefectChart"></canvas>
+        </article>
+      </div>
+      <p class="window-meta" id="eolWindowMeta"></p>
+    </section>
+
+    <section id="eol-tab-inspections" class="panel">
+      <div class="filters">
+        <input id="eolFSn" placeholder="SN" />
+        <select id="eolFPassFail">
+          <option value="">Pass/Fail</option>
+          <option value="Pass">Pass</option>
+          <option value="Fail">Fail</option>
+        </select>
+        <input id="eolFDefect" placeholder="Defect type" />
+        <input id="eolFStation" placeholder="Station" />
+        <input id="eolFStage" placeholder="Stage" />
+        <button id="eolApplyFilters" class="btn">Filtrar</button>
+      </div>
+      <div class="table-wrap">
+        <table id="eolInspTable">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Line</th>
+              <th>SN</th>
+              <th>Station</th>
+              <th>Stage</th>
+              <th>Result</th>
+              <th>Defects</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <span id="eolPageInfo"></span>
+        <button id="eolPrevPage" class="btn">Anterior</button>
+        <button id="eolNextPage" class="btn">Siguiente</button>
+      </div>
+    </section>
+
+    <section id="eol-tab-admin" class="panel">
+      <article class="admin-card">
+        <h2>Borrar histórico EOL</h2>
+        <p>Elimina inspecciones EOL. Esta acción no se puede deshacer.</p>
+        <div class="admin-grid">
+          <label class="field">
+            <span>Borrar todo anterior a</span>
+            <input type="datetime-local" id="eolDeleteBefore" />
+          </label>
+          <button id="eolDeleteBeforeBtn" class="btn btn-danger">Borrar anterior a fecha</button>
+        </div>
+        <div class="admin-grid">
+          <label class="field">
+            <span>Desde</span>
+            <input type="datetime-local" id="eolDeleteFrom" />
+          </label>
+          <label class="field">
+            <span>Hasta</span>
+            <input type="datetime-local" id="eolDeleteTo" />
+          </label>
+          <button id="eolDeleteRangeBtn" class="btn btn-danger">Borrar rango</button>
+        </div>
+        <pre id="eolDeleteResult" class="result"></pre>
       </article>
     </section>
   </div>

@@ -2,8 +2,10 @@
 
 MES local con home para elegir **IMLA** o **EOL**.
 
-- **IMLA**: recibe el POST de Node-RED (`pack_mes_v2_msg`), guarda en PostgreSQL y muestra dashboard multi-línea.
-- **EOL**: sección separada en la UI (en construcción; estructura de datos distinta a IMLA).
+- **IMLA**: `POST /api/inspections` (batch `{ data: [...] }`)
+- **EOL**: `POST /api/eol/inspections` (objeto simple o array / `{ data: [...] }`)
+
+Home web: elige IMLA o EOL. Cada producto tiene líneas, dashboard, CSV e historial propios.
 
 ## Qué incluye
 

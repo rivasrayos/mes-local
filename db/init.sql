@@ -41,3 +41,27 @@ CREATE INDEX IF NOT EXISTS idx_inspections_inspection_time ON inspections (inspe
 CREATE INDEX IF NOT EXISTS idx_inspections_created_at ON inspections (created_at);
 CREATE INDEX IF NOT EXISTS idx_inspections_station_name ON inspections (station_name);
 CREATE INDEX IF NOT EXISTS idx_batches_received_at ON inspection_batches (received_at);
+
+-- MES EOL inspection schema (separate from IMLA)
+CREATE TABLE IF NOT EXISTS eol_inspections (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  line_number          TEXT,
+  station_name         TEXT,
+  stage_name           TEXT,
+  work_station_code    TEXT,
+  sn                   TEXT,
+  inspection_time      TIMESTAMP WITHOUT TIME ZONE,
+  inspection_time_raw  TEXT,
+  pass_fail            TEXT,
+  defect_type          TEXT,
+  image_urls           JSONB NOT NULL DEFAULT '[]'::jsonb,
+  raw_payload          JSONB NOT NULL,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_eol_line_number ON eol_inspections (line_number);
+CREATE INDEX IF NOT EXISTS idx_eol_pass_fail ON eol_inspections (pass_fail);
+CREATE INDEX IF NOT EXISTS idx_eol_sn ON eol_inspections (sn);
+CREATE INDEX IF NOT EXISTS idx_eol_inspection_time ON eol_inspections (inspection_time);
+CREATE INDEX IF NOT EXISTS idx_eol_created_at ON eol_inspections (created_at);
+CREATE INDEX IF NOT EXISTS idx_eol_station_name ON eol_inspections (station_name);

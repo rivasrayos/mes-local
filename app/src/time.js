@@ -19,10 +19,11 @@ function formatInTz(date = new Date(), timeZone = config.tz) {
 
 function parseInspectionTime(raw) {
   if (!raw || typeof raw !== 'string') return null;
-  // Expected: YYYY-MM-DD HH:mm:ss (local plant time, no TZ)
-  const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/);
+  // Accept YYYY-M-D H:mm:ss or zero-padded variants (IMLA + EOL)
+  const m = raw.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})$/);
   if (!m) return null;
-  return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}`;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${m[1]}-${pad(m[2])}-${pad(m[3])} ${pad(m[4])}:${m[5]}:${m[6]}`;
 }
 
 /**
