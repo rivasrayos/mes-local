@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS inspections (
   slot                    TEXT,
   software_version        TEXT,
   recipe_version          TEXT,
+  leg_mapping             TEXT,
   line_number             TEXT,
   station_name            TEXT,
   stage_name              TEXT,

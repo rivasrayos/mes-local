@@ -1,5 +1,14 @@
 const { query, withTransaction } = require('./db');
 const { parseInspectionTime } = require('./time');
+const {
+  DEFAULT_LEG_MAPPING,
+  buildCablesFromSlots,
+  summarizeCables,
+  trendFromCables,
+  defectsFromCables,
+  weldingFromCables,
+  byLineFromCables,
+} = require('./legs');
 
 const PARAM_MAP = {
   Weld_Left_Top_Gap: 'weld_left_top_gap',
@@ -32,6 +41,7 @@ function mapRow(row) {
     slot: row.slot,
     softwareVersion: row.software_version,
     recipeVersion: row.recipe_version,
+    legMapping: row.leg_mapping || DEFAULT_LEG_MAPPING,
     lineNumber: row.line_number,
     stationName: row.station_name,
     stageName: row.stage_name,
@@ -104,19 +114,21 @@ async function ingestBatch(payload) {
       const inspectionTimeRaw = item.inspectionTime != null ? String(item.inspectionTime) : '';
       const inspectionTime = parseInspectionTime(inspectionTimeRaw);
 
+      const legMapping = item.leg_mapping || item.legMapping || DEFAULT_LEG_MAPPING;
+
       const res = await client.query(
         `INSERT INTO inspections (
-          batch_id, carrier_sn, slot, software_version, recipe_version,
+          batch_id, carrier_sn, slot, software_version, recipe_version, leg_mapping,
           line_number, station_name, stage_name, work_station_code, sn,
           inspection_time, inspection_time_raw, pass_fail, defect_type,
           image_urls, welding_position,
           weld_left_top_gap, weld_right_top_gap, imla_to_insulation_gap, imla_to_foil_gap
         ) VALUES (
-          $1,$2,$3,$4,$5,
-          $6,$7,$8,$9,$10,
-          $11::timestamp,$12,$13,$14,
-          $15::jsonb,$16,
-          $17,$18,$19,$20
+          $1,$2,$3,$4,$5,$6,
+          $7,$8,$9,$10,$11,
+          $12::timestamp,$13,$14,$15,
+          $16::jsonb,$17,
+          $18,$19,$20,$21
         ) RETURNING *`,
         [
           batch.id,
@@ -124,6 +136,7 @@ async function ingestBatch(payload) {
           item.slot != null ? String(item.slot) : '',
           item.softwareVersion ?? '',
           item.recipeVersion ?? '',
+          legMapping,
           item.lineNumber ?? '',
           item.stationName ?? '',
           item.stageName ?? '',
@@ -198,124 +211,48 @@ async function listLines() {
 async function getDashboard(q = {}) {
   const { whereSql, params } = buildFilters(q);
 
-  // Top/Bot come from defectType prefixes produced by Node-RED (top-xxx / bottom-xxx)
-  const summaryRes = await query(
+  // Slot rows → physical cables via leg_mapping (1a/1b = same cable, etc.)
+  const slotRes = await query(
     `SELECT
-       COUNT(*)::int AS total,
-       COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'pass')::int AS pass_count,
-       COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'fail')::int AS fail_count,
-       COUNT(DISTINCT sn) FILTER (WHERE sn IS NOT NULL AND sn <> '')::int AS unique_sns,
-       COUNT(DISTINCT batch_id)::int AS carrier_passes,
-       COUNT(*) FILTER (WHERE defect_type ~* '(^|,)\\s*top-')::int AS top_fail_count,
-       COUNT(*) FILTER (WHERE defect_type ~* '(^|,)\\s*bottom-')::int AS bot_fail_count,
-       COUNT(DISTINCT sn) FILTER (
-         WHERE sn IS NOT NULL AND sn <> '' AND defect_type ~* '(^|,)\\s*top-'
-       )::int AS top_fail_sns,
-       COUNT(DISTINCT sn) FILTER (
-         WHERE sn IS NOT NULL AND sn <> '' AND defect_type ~* '(^|,)\\s*bottom-'
-       )::int AS bot_fail_sns,
-       COUNT(DISTINCT batch_id) FILTER (
-         WHERE defect_type ~* '(^|,)\\s*top-'
-       )::int AS top_fail_carrier_passes,
-       COUNT(DISTINCT batch_id) FILTER (
-         WHERE defect_type ~* '(^|,)\\s*bottom-'
-       )::int AS bot_fail_carrier_passes
+       batch_id,
+       slot,
+       pass_fail,
+       defect_type,
+       COALESCE(NULLIF(leg_mapping, ''), '${DEFAULT_LEG_MAPPING}') AS leg_mapping,
+       sn,
+       carrier_sn,
+       line_number,
+       welding_position,
+       COALESCE(inspection_time, created_at::timestamp) AS ts
      FROM inspections
      ${whereSql}`,
     params
   );
 
-  const trendRes = await query(
-    `SELECT
-       date_trunc('hour', COALESCE(inspection_time, created_at::timestamp)) AS bucket,
-       COUNT(*)::int AS total,
-       COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'pass')::int AS pass_count,
-       COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'fail')::int AS fail_count,
-       COUNT(*) FILTER (WHERE defect_type ~* '(^|,)\\s*top-')::int AS top_fail_count,
-       COUNT(*) FILTER (WHERE defect_type ~* '(^|,)\\s*bottom-')::int AS bot_fail_count
+  const snRes = await query(
+    `SELECT COUNT(DISTINCT sn) FILTER (WHERE sn IS NOT NULL AND sn <> '')::int AS unique_sns
      FROM inspections
-     ${whereSql}
-     GROUP BY 1
-     ORDER BY 1`,
+     ${whereSql}`,
     params
   );
 
-  const defectRes = await query(
-    `SELECT trim(d) AS defect, COUNT(*)::int AS count
-     FROM inspections,
-          LATERAL unnest(string_to_array(COALESCE(defect_type, ''), ',')) AS d
-     ${whereSql ? `${whereSql} AND` : 'WHERE'} trim(d) <> ''
-     GROUP BY 1
-     ORDER BY count DESC
-     LIMIT 30`,
-    params
-  );
+  const cables = buildCablesFromSlots(slotRes.rows);
+  const stats = summarizeCables(cables);
+  const uniqueSns = snRes.rows[0]?.unique_sns || 0;
 
-  const defectTopRes = await query(
-    `SELECT trim(d) AS defect, COUNT(*)::int AS count
-     FROM inspections,
-          LATERAL unnest(string_to_array(COALESCE(defect_type, ''), ',')) AS d
-     ${whereSql ? `${whereSql} AND` : 'WHERE'} trim(d) ~* '^top-'
-     GROUP BY 1
-     ORDER BY count DESC
-     LIMIT 30`,
-    params
-  );
-
-  const defectBotRes = await query(
-    `SELECT trim(d) AS defect, COUNT(*)::int AS count
-     FROM inspections,
-          LATERAL unnest(string_to_array(COALESCE(defect_type, ''), ',')) AS d
-     ${whereSql ? `${whereSql} AND` : 'WHERE'} trim(d) ~* '^bottom-'
-     GROUP BY 1
-     ORDER BY count DESC
-     LIMIT 30`,
-    params
-  );
-
-  const weldRes = await query(
-    `SELECT COALESCE(NULLIF(welding_position, ''), 'NA') AS welding_position,
-            COUNT(*)::int AS count
-     FROM inspections
-     ${whereSql ? `${whereSql} AND` : 'WHERE'} LOWER(pass_fail) = 'fail'
-     GROUP BY 1
-     ORDER BY count DESC`,
-    params
-  );
-
-  const weldTopRes = await query(
-    `SELECT COALESCE(NULLIF(welding_position, ''), 'NA') AS welding_position,
-            COUNT(*)::int AS count
-     FROM inspections
-     ${whereSql ? `${whereSql} AND` : 'WHERE'} defect_type ~* '(^|,)\\s*top-'
-     GROUP BY 1
-     ORDER BY count DESC`,
-    params
-  );
-
-  const weldBotRes = await query(
-    `SELECT COALESCE(NULLIF(welding_position, ''), 'NA') AS welding_position,
-            COUNT(*)::int AS count
-     FROM inspections
-     ${whereSql ? `${whereSql} AND` : 'WHERE'} defect_type ~* '(^|,)\\s*bottom-'
-     GROUP BY 1
-     ORDER BY count DESC`,
-    params
-  );
-
-  const lineRes = await query(
-    `SELECT COALESCE(NULLIF(line_number, ''), '(blank)') AS line_number,
-            COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'pass')::int AS pass_count,
-            COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'fail')::int AS fail_count,
-            COUNT(DISTINCT sn) FILTER (WHERE sn IS NOT NULL AND sn <> '')::int AS unique_sns,
-            COUNT(DISTINCT batch_id)::int AS carrier_passes
-     FROM inspections
-     ${whereSql}
-     GROUP BY 1
-     ORDER BY 1`,
-    params
-  );
+  function packSummary({ pass, fail }) {
+    return {
+      total: stats.total,
+      passCount: pass,
+      failCount: fail,
+      passRate: stats.total ? (pass / stats.total) * 100 : 0,
+      failRate: stats.total ? (fail / stats.total) * 100 : 0,
+      uniqueSns,
+      carrierPasses: stats.carrierPasses,
+      uniqueCarriers: stats.carrierPasses,
+      unit: 'cable',
+    };
+  }
 
   const paramSeries = {};
   for (const [name, col] of Object.entries(PARAM_MAP)) {
@@ -337,95 +274,20 @@ async function getDashboard(q = {}) {
     }));
   }
 
-  const summary = summaryRes.rows[0];
-  const total = summary.total || 0;
-  const failCount = summary.fail_count || 0;
-  const passCount = summary.pass_count || 0;
-  const topFail = summary.top_fail_count || 0;
-  const botFail = summary.bot_fail_count || 0;
-  const topPass = Math.max(0, total - topFail);
-  const botPass = Math.max(0, total - botFail);
-
-  function packSummary({ pass, fail, uniqueSns, carrierPasses }) {
-    return {
-      total,
-      passCount: pass,
-      failCount: fail,
-      passRate: total ? (pass / total) * 100 : 0,
-      failRate: total ? (fail / total) * 100 : 0,
-      uniqueSns: uniqueSns || 0,
-      carrierPasses: carrierPasses || 0,
-      uniqueCarriers: carrierPasses || 0, // backward compatible alias
-    };
-  }
-
   return {
-    summary: packSummary({
-      pass: passCount,
-      fail: failCount,
-      uniqueSns: summary.unique_sns,
-      carrierPasses: summary.carrier_passes,
-    }),
-    summaryTop: packSummary({
-      pass: topPass,
-      fail: topFail,
-      uniqueSns: summary.unique_sns,
-      carrierPasses: summary.carrier_passes,
-    }),
-    summaryBot: packSummary({
-      pass: botPass,
-      fail: botFail,
-      uniqueSns: summary.unique_sns,
-      carrierPasses: summary.carrier_passes,
-    }),
-    trend: trendRes.rows.map((r) => ({
-      bucket: r.bucket,
-      total: r.total,
-      passCount: r.pass_count,
-      failCount: r.fail_count,
-    })),
-    trendTop: trendRes.rows.map((r) => {
-      const total = r.total || 0;
-      const fail = r.top_fail_count || 0;
-      return {
-        bucket: r.bucket,
-        total,
-        passCount: Math.max(0, total - fail),
-        failCount: fail,
-      };
-    }),
-    trendBot: trendRes.rows.map((r) => {
-      const total = r.total || 0;
-      const fail = r.bot_fail_count || 0;
-      return {
-        bucket: r.bucket,
-        total,
-        passCount: Math.max(0, total - fail),
-        failCount: fail,
-      };
-    }),
-    defects: defectRes.rows,
-    defectsTop: defectTopRes.rows,
-    defectsBot: defectBotRes.rows,
-    weldingOnFail: weldRes.rows,
-    weldingOnFailTop: weldTopRes.rows,
-    weldingOnFailBot: weldBotRes.rows,
-    byLine: lineRes.rows.map((r) => {
-      const total = r.total || 0;
-      const passCount = r.pass_count || 0;
-      const failCount = r.fail_count || 0;
-      return {
-        lineNumber: r.line_number,
-        total,
-        passCount,
-        failCount,
-        passRate: total ? (passCount / total) * 100 : 0,
-        failRate: total ? (failCount / total) * 100 : 0,
-        uniqueSns: r.unique_sns || 0,
-        carrierPasses: r.carrier_passes || 0,
-        uniqueCarriers: r.carrier_passes || 0,
-      };
-    }),
+    summary: packSummary({ pass: stats.passCount, fail: stats.failCount }),
+    summaryTop: packSummary({ pass: stats.topPass, fail: stats.topFail }),
+    summaryBot: packSummary({ pass: stats.botPass, fail: stats.botFail }),
+    trend: trendFromCables(cables, 'general'),
+    trendTop: trendFromCables(cables, 'top'),
+    trendBot: trendFromCables(cables, 'bot'),
+    defects: defectsFromCables(cables, 'all'),
+    defectsTop: defectsFromCables(cables, 'top'),
+    defectsBot: defectsFromCables(cables, 'bot'),
+    weldingOnFail: weldingFromCables(cables, 'general'),
+    weldingOnFailTop: weldingFromCables(cables, 'top'),
+    weldingOnFailBot: weldingFromCables(cables, 'bot'),
+    byLine: byLineFromCables(cables),
     parameters: paramSeries,
   };
 }
@@ -483,7 +345,7 @@ async function deleteByDateRange({ from, to, before }) {
 
 function toCsv(items) {
   const headers = [
-    'id', 'batchId', 'carrierSn', 'slot', 'softwareVersion', 'recipeVersion',
+    'id', 'batchId', 'carrierSn', 'slot', 'softwareVersion', 'recipeVersion', 'legMapping',
     'lineNumber', 'stationName', 'stageName', 'workStationCode', 'SN',
     'inspectionTime', 'passFail', 'defectType', 'WeldingPosition',
     'imageUrls', 'Weld_Left_Top_Gap', 'Weld_Right_Top_Gap',
@@ -506,6 +368,7 @@ function toCsv(items) {
       item.slot,
       item.softwareVersion,
       item.recipeVersion,
+      item.legMapping,
       item.lineNumber,
       item.stationName,
       item.stageName,

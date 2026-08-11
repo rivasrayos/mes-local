@@ -109,7 +109,7 @@ function makeChart(id, config) {
 
 function kpiItems(summary, { includeCarriers = true } = {}) {
   const items = [
-    { label: 'Total', value: summary.total },
+    { label: summary.unit === 'cable' ? 'Cables' : 'Total', value: summary.total },
     { label: 'Pass', value: summary.passCount, cls: 'pass' },
     { label: 'Fail', value: summary.failCount, cls: 'fail' },
     { label: 'Pass rate', value: fmtPct(summary.passRate), cls: 'pass' },

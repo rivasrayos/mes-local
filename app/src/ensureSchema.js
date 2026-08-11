@@ -4,6 +4,11 @@ async function ensureSchema() {
   await query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
 
   await query(`
+    ALTER TABLE IF EXISTS inspections
+      ADD COLUMN IF NOT EXISTS leg_mapping TEXT
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS eol_inspections (
       id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       line_number          TEXT,
