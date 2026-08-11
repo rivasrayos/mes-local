@@ -205,7 +205,7 @@ async function getDashboard(q = {}) {
        COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'pass')::int AS pass_count,
        COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'fail')::int AS fail_count,
        COUNT(DISTINCT sn) FILTER (WHERE sn IS NOT NULL AND sn <> '')::int AS unique_sns,
-       COUNT(DISTINCT carrier_sn) FILTER (WHERE carrier_sn IS NOT NULL AND carrier_sn <> '')::int AS unique_carriers,
+       COUNT(DISTINCT batch_id)::int AS carrier_passes,
        COUNT(*) FILTER (WHERE defect_type ~* '(^|,)\\s*top-')::int AS top_fail_count,
        COUNT(*) FILTER (WHERE defect_type ~* '(^|,)\\s*bottom-')::int AS bot_fail_count,
        COUNT(DISTINCT sn) FILTER (
@@ -214,12 +214,12 @@ async function getDashboard(q = {}) {
        COUNT(DISTINCT sn) FILTER (
          WHERE sn IS NOT NULL AND sn <> '' AND defect_type ~* '(^|,)\\s*bottom-'
        )::int AS bot_fail_sns,
-       COUNT(DISTINCT carrier_sn) FILTER (
-         WHERE carrier_sn IS NOT NULL AND carrier_sn <> '' AND defect_type ~* '(^|,)\\s*top-'
-       )::int AS top_fail_carriers,
-       COUNT(DISTINCT carrier_sn) FILTER (
-         WHERE carrier_sn IS NOT NULL AND carrier_sn <> '' AND defect_type ~* '(^|,)\\s*bottom-'
-       )::int AS bot_fail_carriers
+       COUNT(DISTINCT batch_id) FILTER (
+         WHERE defect_type ~* '(^|,)\\s*top-'
+       )::int AS top_fail_carrier_passes,
+       COUNT(DISTINCT batch_id) FILTER (
+         WHERE defect_type ~* '(^|,)\\s*bottom-'
+       )::int AS bot_fail_carrier_passes
      FROM inspections
      ${whereSql}`,
     params
@@ -309,7 +309,7 @@ async function getDashboard(q = {}) {
             COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'pass')::int AS pass_count,
             COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'fail')::int AS fail_count,
             COUNT(DISTINCT sn) FILTER (WHERE sn IS NOT NULL AND sn <> '')::int AS unique_sns,
-            COUNT(DISTINCT carrier_sn) FILTER (WHERE carrier_sn IS NOT NULL AND carrier_sn <> '')::int AS unique_carriers
+            COUNT(DISTINCT batch_id)::int AS carrier_passes
      FROM inspections
      ${whereSql}
      GROUP BY 1
@@ -346,7 +346,7 @@ async function getDashboard(q = {}) {
   const topPass = Math.max(0, total - topFail);
   const botPass = Math.max(0, total - botFail);
 
-  function packSummary({ pass, fail, uniqueSns, uniqueCarriers }) {
+  function packSummary({ pass, fail, uniqueSns, carrierPasses }) {
     return {
       total,
       passCount: pass,
@@ -354,7 +354,8 @@ async function getDashboard(q = {}) {
       passRate: total ? (pass / total) * 100 : 0,
       failRate: total ? (fail / total) * 100 : 0,
       uniqueSns: uniqueSns || 0,
-      uniqueCarriers: uniqueCarriers || 0,
+      carrierPasses: carrierPasses || 0,
+      uniqueCarriers: carrierPasses || 0, // backward compatible alias
     };
   }
 
@@ -363,19 +364,19 @@ async function getDashboard(q = {}) {
       pass: passCount,
       fail: failCount,
       uniqueSns: summary.unique_sns,
-      uniqueCarriers: summary.unique_carriers,
+      carrierPasses: summary.carrier_passes,
     }),
     summaryTop: packSummary({
       pass: topPass,
       fail: topFail,
       uniqueSns: summary.unique_sns,
-      uniqueCarriers: summary.unique_carriers,
+      carrierPasses: summary.carrier_passes,
     }),
     summaryBot: packSummary({
       pass: botPass,
       fail: botFail,
       uniqueSns: summary.unique_sns,
-      uniqueCarriers: summary.unique_carriers,
+      carrierPasses: summary.carrier_passes,
     }),
     trend: trendRes.rows.map((r) => ({
       bucket: r.bucket,
@@ -421,7 +422,8 @@ async function getDashboard(q = {}) {
         passRate: total ? (passCount / total) * 100 : 0,
         failRate: total ? (failCount / total) * 100 : 0,
         uniqueSns: r.unique_sns || 0,
-        uniqueCarriers: r.unique_carriers || 0,
+        carrierPasses: r.carrier_passes || 0,
+        uniqueCarriers: r.carrier_passes || 0,
       };
     }),
     parameters: paramSeries,

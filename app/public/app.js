@@ -116,7 +116,12 @@ function kpiItems(summary, { includeCarriers = true } = {}) {
     { label: 'Fail rate', value: fmtPct(summary.failRate), cls: 'fail' },
     { label: 'SN únicos', value: summary.uniqueSns },
   ];
-  if (includeCarriers) items.push({ label: 'Carriers', value: summary.uniqueCarriers });
+  if (includeCarriers) {
+    items.push({
+      label: 'Pases carriers',
+      value: summary.carrierPasses ?? summary.uniqueCarriers,
+    });
+  }
   return items;
 }
 
