@@ -230,7 +230,9 @@ async function getDashboard(q = {}) {
        date_trunc('hour', COALESCE(inspection_time, created_at::timestamp)) AS bucket,
        COUNT(*)::int AS total,
        COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'pass')::int AS pass_count,
-       COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'fail')::int AS fail_count
+       COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'fail')::int AS fail_count,
+       COUNT(*) FILTER (WHERE defect_type ~* '(^|,)\\s*top-')::int AS top_fail_count,
+       COUNT(*) FILTER (WHERE defect_type ~* '(^|,)\\s*bottom-')::int AS bot_fail_count
      FROM inspections
      ${whereSql}
      GROUP BY 1
@@ -249,11 +251,53 @@ async function getDashboard(q = {}) {
     params
   );
 
+  const defectTopRes = await query(
+    `SELECT trim(d) AS defect, COUNT(*)::int AS count
+     FROM inspections,
+          LATERAL unnest(string_to_array(COALESCE(defect_type, ''), ',')) AS d
+     ${whereSql ? `${whereSql} AND` : 'WHERE'} trim(d) ~* '^top-'
+     GROUP BY 1
+     ORDER BY count DESC
+     LIMIT 30`,
+    params
+  );
+
+  const defectBotRes = await query(
+    `SELECT trim(d) AS defect, COUNT(*)::int AS count
+     FROM inspections,
+          LATERAL unnest(string_to_array(COALESCE(defect_type, ''), ',')) AS d
+     ${whereSql ? `${whereSql} AND` : 'WHERE'} trim(d) ~* '^bottom-'
+     GROUP BY 1
+     ORDER BY count DESC
+     LIMIT 30`,
+    params
+  );
+
   const weldRes = await query(
     `SELECT COALESCE(NULLIF(welding_position, ''), 'NA') AS welding_position,
             COUNT(*)::int AS count
      FROM inspections
      ${whereSql ? `${whereSql} AND` : 'WHERE'} LOWER(pass_fail) = 'fail'
+     GROUP BY 1
+     ORDER BY count DESC`,
+    params
+  );
+
+  const weldTopRes = await query(
+    `SELECT COALESCE(NULLIF(welding_position, ''), 'NA') AS welding_position,
+            COUNT(*)::int AS count
+     FROM inspections
+     ${whereSql ? `${whereSql} AND` : 'WHERE'} defect_type ~* '(^|,)\\s*top-'
+     GROUP BY 1
+     ORDER BY count DESC`,
+    params
+  );
+
+  const weldBotRes = await query(
+    `SELECT COALESCE(NULLIF(welding_position, ''), 'NA') AS welding_position,
+            COUNT(*)::int AS count
+     FROM inspections
+     ${whereSql ? `${whereSql} AND` : 'WHERE'} defect_type ~* '(^|,)\\s*bottom-'
      GROUP BY 1
      ORDER BY count DESC`,
     params
@@ -339,8 +383,32 @@ async function getDashboard(q = {}) {
       passCount: r.pass_count,
       failCount: r.fail_count,
     })),
+    trendTop: trendRes.rows.map((r) => {
+      const total = r.total || 0;
+      const fail = r.top_fail_count || 0;
+      return {
+        bucket: r.bucket,
+        total,
+        passCount: Math.max(0, total - fail),
+        failCount: fail,
+      };
+    }),
+    trendBot: trendRes.rows.map((r) => {
+      const total = r.total || 0;
+      const fail = r.bot_fail_count || 0;
+      return {
+        bucket: r.bucket,
+        total,
+        passCount: Math.max(0, total - fail),
+        failCount: fail,
+      };
+    }),
     defects: defectRes.rows,
+    defectsTop: defectTopRes.rows,
+    defectsBot: defectBotRes.rows,
     weldingOnFail: weldRes.rows,
+    weldingOnFailTop: weldTopRes.rows,
+    weldingOnFailBot: weldBotRes.rows,
     byLine: lineRes.rows.map((r) => {
       const total = r.total || 0;
       const passCount = r.pass_count || 0;

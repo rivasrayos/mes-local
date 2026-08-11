@@ -207,34 +207,40 @@ async function loadImlaDashboard() {
         <div class="kpi-row nested">${renderKpiCards(data.summaryBot || data.summary)}</div>
       </section>
     `;
-    const labels = data.trend.map((t) => String(t.bucket).slice(5, 16).replace('T', ' '));
-    makeChart('trendChart', {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          { label: 'Pass', data: data.trend.map((t) => t.passCount), borderColor: '#0f7a45', tension: 0.25 },
-          { label: 'Fail', data: data.trend.map((t) => t.failCount), borderColor: '#b42318', tension: 0.25 },
-        ],
-      },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+    const passFailLine = (rows) => ({
+      labels: rows.map((t) => String(t.bucket).slice(5, 16).replace('T', ' ')),
+      datasets: [
+        { label: 'Pass', data: rows.map((t) => t.passCount), borderColor: '#0f7a45', tension: 0.25 },
+        { label: 'Fail', data: rows.map((t) => t.failCount), borderColor: '#b42318', tension: 0.25 },
+      ],
     });
-    makeChart('defectChart', {
-      type: 'bar',
-      data: {
-        labels: data.defects.map((d) => d.defect),
-        datasets: [{ label: 'Count', data: data.defects.map((d) => d.count), backgroundColor: '#0f6e7c' }],
-      },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+    const defectBar = (rows, color) => ({
+      labels: rows.map((d) => d.defect),
+      datasets: [{ label: 'Count', data: rows.map((d) => d.count), backgroundColor: color }],
     });
-    makeChart('weldChart', {
-      type: 'doughnut',
-      data: {
-        labels: data.weldingOnFail.map((w) => w.welding_position),
-        datasets: [{ data: data.weldingOnFail.map((w) => w.count), backgroundColor: ['#0f6e7c', '#c45c26', '#b42318', '#5a6b78'] }],
-      },
-      options: { responsive: true, maintainAspectRatio: false },
+    const weldDonut = (rows) => ({
+      labels: rows.map((w) => w.welding_position),
+      datasets: [{
+        data: rows.map((w) => w.count),
+        backgroundColor: ['#0f6e7c', '#c45c26', '#b42318', '#5a6b78'],
+      }],
     });
+    const lineOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } };
+    const barOpts = { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+    const donutOpts = { responsive: true, maintainAspectRatio: false };
+
+    makeChart('trendChart', { type: 'line', data: passFailLine(data.trend || []), options: lineOpts });
+    makeChart('trendChartTop', { type: 'line', data: passFailLine(data.trendTop || []), options: lineOpts });
+    makeChart('trendChartBot', { type: 'line', data: passFailLine(data.trendBot || []), options: lineOpts });
+
+    makeChart('defectChart', { type: 'bar', data: defectBar(data.defects || [], '#5a6b78'), options: barOpts });
+    makeChart('defectChartTop', { type: 'bar', data: defectBar(data.defectsTop || [], '#0f6e7c'), options: barOpts });
+    makeChart('defectChartBot', { type: 'bar', data: defectBar(data.defectsBot || [], '#c45c26'), options: barOpts });
+
+    makeChart('weldChart', { type: 'doughnut', data: weldDonut(data.weldingOnFail || []), options: donutOpts });
+    makeChart('weldChartTop', { type: 'doughnut', data: weldDonut(data.weldingOnFailTop || []), options: donutOpts });
+    makeChart('weldChartBot', { type: 'doughnut', data: weldDonut(data.weldingOnFailBot || []), options: donutOpts });
+
     const paramNames = Object.keys(data.parameters || {});
     const first = paramNames[0] ? data.parameters[paramNames[0]] : [];
     makeChart('paramChart', {
