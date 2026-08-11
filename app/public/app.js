@@ -341,6 +341,7 @@ async function openImlaDetail(id) {
       <dt>slot</dt><dd>${item.slot || ''}</dd>
       <dt>softwareVersion</dt><dd>${item.softwareVersion || ''}</dd>
       <dt>recipeVersion</dt><dd>${item.recipeVersion || ''}</dd>
+      <dt>legMapping</dt><dd>${item.legMapping || ''}</dd>
       <dt>lineNumber</dt><dd>${item.lineNumber || ''}</dd>
       <dt>stationName</dt><dd>${item.stationName || ''}</dd>
       <dt>stageName</dt><dd>${item.stageName || ''}</dd>
