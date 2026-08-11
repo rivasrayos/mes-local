@@ -193,7 +193,20 @@ async function loadImlaDashboard() {
   const data = await api(`/api/dashboard?${imlaQs()}`);
 
   if (route.page === 'line') {
-    $('kpiRow').innerHTML = `<section class="line-kpi-block current"><div class="kpi-row nested">${renderKpiCards(data.summary)}</div></section>`;
+    $('kpiRow').innerHTML = `
+      <section class="line-kpi-block current">
+        <header class="line-kpi-header"><h3>General</h3></header>
+        <div class="kpi-row nested">${renderKpiCards(data.summary)}</div>
+      </section>
+      <section class="line-kpi-block current kpi-view-top">
+        <header class="line-kpi-header"><h3>TOP</h3></header>
+        <div class="kpi-row nested">${renderKpiCards(data.summaryTop || data.summary)}</div>
+      </section>
+      <section class="line-kpi-block current kpi-view-bot">
+        <header class="line-kpi-header"><h3>BOT</h3></header>
+        <div class="kpi-row nested">${renderKpiCards(data.summaryBot || data.summary)}</div>
+      </section>
+    `;
     const labels = data.trend.map((t) => String(t.bucket).slice(5, 16).replace('T', ' '));
     makeChart('trendChart', {
       type: 'line',

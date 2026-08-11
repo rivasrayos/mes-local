@@ -198,13 +198,28 @@ async function listLines() {
 async function getDashboard(q = {}) {
   const { whereSql, params } = buildFilters(q);
 
+  // Top/Bot come from defectType prefixes produced by Node-RED (top-xxx / bottom-xxx)
   const summaryRes = await query(
     `SELECT
        COUNT(*)::int AS total,
        COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'pass')::int AS pass_count,
        COUNT(*) FILTER (WHERE LOWER(pass_fail) = 'fail')::int AS fail_count,
        COUNT(DISTINCT sn) FILTER (WHERE sn IS NOT NULL AND sn <> '')::int AS unique_sns,
-       COUNT(DISTINCT carrier_sn) FILTER (WHERE carrier_sn IS NOT NULL AND carrier_sn <> '')::int AS unique_carriers
+       COUNT(DISTINCT carrier_sn) FILTER (WHERE carrier_sn IS NOT NULL AND carrier_sn <> '')::int AS unique_carriers,
+       COUNT(*) FILTER (WHERE defect_type ~* '(^|,)\\s*top-')::int AS top_fail_count,
+       COUNT(*) FILTER (WHERE defect_type ~* '(^|,)\\s*bottom-')::int AS bot_fail_count,
+       COUNT(DISTINCT sn) FILTER (
+         WHERE sn IS NOT NULL AND sn <> '' AND defect_type ~* '(^|,)\\s*top-'
+       )::int AS top_fail_sns,
+       COUNT(DISTINCT sn) FILTER (
+         WHERE sn IS NOT NULL AND sn <> '' AND defect_type ~* '(^|,)\\s*bottom-'
+       )::int AS bot_fail_sns,
+       COUNT(DISTINCT carrier_sn) FILTER (
+         WHERE carrier_sn IS NOT NULL AND carrier_sn <> '' AND defect_type ~* '(^|,)\\s*top-'
+       )::int AS top_fail_carriers,
+       COUNT(DISTINCT carrier_sn) FILTER (
+         WHERE carrier_sn IS NOT NULL AND carrier_sn <> '' AND defect_type ~* '(^|,)\\s*bottom-'
+       )::int AS bot_fail_carriers
      FROM inspections
      ${whereSql}`,
     params
@@ -282,17 +297,42 @@ async function getDashboard(q = {}) {
   const total = summary.total || 0;
   const failCount = summary.fail_count || 0;
   const passCount = summary.pass_count || 0;
+  const topFail = summary.top_fail_count || 0;
+  const botFail = summary.bot_fail_count || 0;
+  const topPass = Math.max(0, total - topFail);
+  const botPass = Math.max(0, total - botFail);
+
+  function packSummary({ pass, fail, uniqueSns, uniqueCarriers }) {
+    return {
+      total,
+      passCount: pass,
+      failCount: fail,
+      passRate: total ? (pass / total) * 100 : 0,
+      failRate: total ? (fail / total) * 100 : 0,
+      uniqueSns: uniqueSns || 0,
+      uniqueCarriers: uniqueCarriers || 0,
+    };
+  }
 
   return {
-    summary: {
-      total,
-      passCount,
-      failCount,
-      passRate: total ? (passCount / total) * 100 : 0,
-      failRate: total ? (failCount / total) * 100 : 0,
+    summary: packSummary({
+      pass: passCount,
+      fail: failCount,
       uniqueSns: summary.unique_sns,
       uniqueCarriers: summary.unique_carriers,
-    },
+    }),
+    summaryTop: packSummary({
+      pass: topPass,
+      fail: topFail,
+      uniqueSns: summary.unique_sns,
+      uniqueCarriers: summary.unique_carriers,
+    }),
+    summaryBot: packSummary({
+      pass: botPass,
+      fail: botFail,
+      uniqueSns: summary.unique_sns,
+      uniqueCarriers: summary.unique_carriers,
+    }),
     trend: trendRes.rows.map((r) => ({
       bucket: r.bucket,
       total: r.total,

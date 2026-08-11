@@ -278,6 +278,14 @@ select, input {
   border-color: var(--accent);
 }
 
+.kpi-view-top {
+  border-left: 4px solid #0f6e7c;
+}
+
+.kpi-view-bot {
+  border-left: 4px solid #c45c26;
+}
+
 .tabs {
   display: flex;
   gap: 0.4rem;
