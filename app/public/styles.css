@@ -618,20 +618,20 @@ th {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(20, 33, 43, 0.55);
+  background: #0b1116;
   display: flex;
   align-items: stretch;
   justify-content: center;
-  padding: 1rem;
+  padding: 0;
 }
 
 .media-lightbox-panel {
-  width: min(1200px, 100%);
+  width: 100%;
   height: 100%;
-  background: #f8fbfd;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
+  background: #0b1116;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -642,27 +642,42 @@ th {
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--line);
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 29, 0.96);
+  color: #e8eef3;
 }
 
 .media-lightbox-panel header h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1rem;
+  color: #e8eef3;
 }
 
 .media-lightbox-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
 }
 
-.media-lightbox-panel iframe {
+.embed-stage {
+  position: relative;
   flex: 1;
-  width: 100%;
-  border: 0;
-  background: #0f171d;
   min-height: 0;
+  overflow: hidden;
+  background: #0b1116;
+}
+
+.media-lightbox-panel iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0b1116;
+  transform: translate(-50%, -50%) scale(1.75);
+  transform-origin: center center;
 }
 
 @media (max-width: 900px) {

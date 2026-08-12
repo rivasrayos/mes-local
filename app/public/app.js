@@ -166,10 +166,22 @@ function renderImages(urls = []) {
   }).join('') || '<span>—</span>';
 }
 
+const mediaZoom = { value: 1.75, min: 1, max: 3, step: 0.25 };
+
+function applyMediaZoom() {
+  const frame = $('mediaLightboxFrame');
+  const btn = $('mediaZoomReset');
+  if (!frame) return;
+  frame.style.transform = `translate(-50%, -50%) scale(${mediaZoom.value})`;
+  if (btn) btn.textContent = `${Math.round(mediaZoom.value * 100)}%`;
+}
+
 function openMediaLightbox(url) {
+  mediaZoom.value = 1.75; // crop Overview grey margins by default
   $('mediaLightboxTitle').textContent = 'Vista con boundings';
   $('mediaLightboxOpen').href = url;
   $('mediaLightboxFrame').src = url;
+  applyMediaZoom();
   $('mediaLightbox').classList.remove('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'false');
 }
@@ -178,6 +190,7 @@ function closeMediaLightbox() {
   $('mediaLightbox').classList.add('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'true');
   $('mediaLightboxFrame').src = 'about:blank';
+  $('mediaLightboxFrame').style.transform = '';
 }
 
 function wireImageActions(root) {
@@ -719,6 +732,18 @@ function wireUi() {
   $('closeMediaLightbox').addEventListener('click', closeMediaLightbox);
   $('mediaLightbox').addEventListener('click', (e) => {
     if (e.target.id === 'mediaLightbox') closeMediaLightbox();
+  });
+  $('mediaZoomIn').addEventListener('click', () => {
+    mediaZoom.value = Math.min(mediaZoom.max, mediaZoom.value + mediaZoom.step);
+    applyMediaZoom();
+  });
+  $('mediaZoomOut').addEventListener('click', () => {
+    mediaZoom.value = Math.max(mediaZoom.min, mediaZoom.value - mediaZoom.step);
+    applyMediaZoom();
+  });
+  $('mediaZoomReset').addEventListener('click', () => {
+    mediaZoom.value = 1.75;
+    applyMediaZoom();
   });
 
   $('deleteBeforeBtn').addEventListener('click', async () => {

@@ -354,11 +354,16 @@
       <header>
         <h2 id="mediaLightboxTitle">Captura</h2>
         <div class="media-lightbox-actions">
+          <button id="mediaZoomOut" class="btn" type="button">−</button>
+          <button id="mediaZoomReset" class="btn" type="button">100%</button>
+          <button id="mediaZoomIn" class="btn" type="button">+</button>
           <a id="mediaLightboxOpen" class="btn" href="#" target="_blank" rel="noopener">Abrir en pestaña</a>
           <button id="closeMediaLightbox" class="btn" type="button">Cerrar</button>
         </div>
       </header>
-      <iframe id="mediaLightboxFrame" title="capture viewer" referrerpolicy="no-referrer"></iframe>
+      <div class="embed-stage" id="mediaEmbedStage">
+        <iframe id="mediaLightboxFrame" title="capture viewer" referrerpolicy="no-referrer"></iframe>
+      </div>
     </div>
   </aside>
 </body>
