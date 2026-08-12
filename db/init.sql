@@ -51,7 +51,6 @@ CREATE TABLE IF NOT EXISTS eol_inspections (
   stage_name           TEXT,
   work_station_code    TEXT,
   sn                   TEXT,
-  view_name            TEXT,
   inspection_time      TIMESTAMP WITHOUT TIME ZONE,
   inspection_time_raw  TEXT,
   pass_fail            TEXT,
@@ -64,7 +63,6 @@ CREATE TABLE IF NOT EXISTS eol_inspections (
 CREATE INDEX IF NOT EXISTS idx_eol_line_number ON eol_inspections (line_number);
 CREATE INDEX IF NOT EXISTS idx_eol_pass_fail ON eol_inspections (pass_fail);
 CREATE INDEX IF NOT EXISTS idx_eol_sn ON eol_inspections (sn);
-CREATE INDEX IF NOT EXISTS idx_eol_view_name ON eol_inspections (view_name);
 CREATE INDEX IF NOT EXISTS idx_eol_inspection_time ON eol_inspections (inspection_time);
 CREATE INDEX IF NOT EXISTS idx_eol_created_at ON eol_inspections (created_at);
 CREATE INDEX IF NOT EXISTS idx_eol_station_name ON eol_inspections (station_name);
