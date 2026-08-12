@@ -16,6 +16,7 @@ async function ensureSchema() {
       stage_name           TEXT,
       work_station_code    TEXT,
       sn                   TEXT,
+      view_name            TEXT,
       inspection_time      TIMESTAMP WITHOUT TIME ZONE,
       inspection_time_raw  TEXT,
       pass_fail            TEXT,
@@ -26,9 +27,15 @@ async function ensureSchema() {
     )
   `);
 
+  await query(`
+    ALTER TABLE IF EXISTS eol_inspections
+      ADD COLUMN IF NOT EXISTS view_name TEXT
+  `);
+
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_line_number ON eol_inspections (line_number)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_pass_fail ON eol_inspections (pass_fail)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_sn ON eol_inspections (sn)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_view_name ON eol_inspections (view_name)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_inspection_time ON eol_inspections (inspection_time)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_created_at ON eol_inspections (created_at)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_station_name ON eol_inspections (station_name)`);

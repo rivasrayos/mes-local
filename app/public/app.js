@@ -526,6 +526,7 @@ async function loadEolInspections() {
   updateEolChrome(getRoute());
   const extra = {
     sn: $('eolFSn').value.trim(),
+    view: $('eolFView').value.trim(),
     passFail: $('eolFPassFail').value,
     defectType: $('eolFDefect').value.trim(),
     stationName: $('eolFStation').value.trim(),
@@ -539,6 +540,7 @@ async function loadEolInspections() {
     <tr>
       <td>${item.inspectionTime || ''}</td>
       <td>${item.lineNumber || ''}</td>
+      <td>${item.view || ''}</td>
       <td>${item.SN || ''}</td>
       <td>${item.stationName || ''}</td>
       <td>${item.stageName || ''}</td>
@@ -561,6 +563,7 @@ async function openEolDetail(id) {
     <dl class="kv">
       <dt>id</dt><dd>${item.id}</dd>
       <dt>lineNumber</dt><dd>${item.lineNumber || ''}</dd>
+      <dt>view</dt><dd>${item.view || ''}</dd>
       <dt>stationName</dt><dd>${item.stationName || ''}</dd>
       <dt>stageName</dt><dd>${item.stageName || ''}</dd>
       <dt>workStationCode</dt><dd>${item.workStationCode || ''}</dd>
@@ -711,6 +714,7 @@ function wireUi() {
   $('eolExportBtn').addEventListener('click', () => {
     window.location.href = `/api/eol/inspections/export.csv?${eolQs({
       sn: $('eolFSn').value.trim(),
+      view: $('eolFView').value.trim(),
       passFail: $('eolFPassFail').value,
       defectType: $('eolFDefect').value.trim(),
       stationName: $('eolFStation').value.trim(),

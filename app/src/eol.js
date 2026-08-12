@@ -1,6 +1,15 @@
 const { query, withTransaction } = require('./db');
 const { parseInspectionTime } = require('./time');
 
+function normalizeView(value) {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (typeof value === 'object') {
+    return String(value.name || value.view || value.camera || JSON.stringify(value));
+  }
+  return String(value);
+}
+
 function mapRow(row) {
   if (!row) return null;
   return {
@@ -10,6 +19,7 @@ function mapRow(row) {
     stageName: row.stage_name,
     workStationCode: row.work_station_code,
     SN: row.sn,
+    view: row.view_name || '',
     inspectionTime: row.inspection_time_raw || (row.inspection_time
       ? String(row.inspection_time).replace('T', ' ').slice(0, 19)
       : null),
@@ -40,6 +50,7 @@ function buildFilters(q) {
   if (q.lineNumber) add('line_number = ?', q.lineNumber);
   if (q.passFail) add('pass_fail = ?', q.passFail);
   if (q.sn) add('sn ILIKE ?', `%${q.sn}%`);
+  if (q.view) add('view_name ILIKE ?', `%${q.view}%`);
   if (q.stationName) add('station_name ILIKE ?', `%${q.stationName}%`);
   if (q.stageName) add('stage_name ILIKE ?', `%${q.stageName}%`);
   if (q.defectType) add('defect_type ILIKE ?', `%${q.defectType}%`);
@@ -67,15 +78,17 @@ async function ingestEol(body) {
       const inspectionTimeRaw = item.inspectionTime != null ? String(item.inspectionTime) : '';
       const inspectionTime = parseInspectionTime(inspectionTimeRaw);
 
+      const viewName = normalizeView(item.view ?? item.VIEW ?? item.viewName);
+
       const res = await client.query(
         `INSERT INTO eol_inspections (
-          line_number, station_name, stage_name, work_station_code, sn,
+          line_number, station_name, stage_name, work_station_code, sn, view_name,
           inspection_time, inspection_time_raw, pass_fail, defect_type,
           image_urls, raw_payload
         ) VALUES (
-          $1,$2,$3,$4,$5,
-          $6::timestamp,$7,$8,$9,
-          $10::jsonb,$11::jsonb
+          $1,$2,$3,$4,$5,$6,
+          $7::timestamp,$8,$9,$10,
+          $11::jsonb,$12::jsonb
         ) RETURNING *`,
         [
           item.lineNumber ?? '',
@@ -83,6 +96,7 @@ async function ingestEol(body) {
           item.stageName ?? '',
           item.workStationCode ?? '',
           item.SN ?? item.sn ?? '',
+          viewName,
           inspectionTime,
           inspectionTimeRaw,
           item.passFail ?? '',
@@ -267,7 +281,7 @@ async function deleteEolByDateRange({ from, to, before }) {
 
 function toEolCsv(items) {
   const headers = [
-    'id', 'lineNumber', 'stationName', 'stageName', 'workStationCode', 'SN',
+    'id', 'lineNumber', 'view', 'stationName', 'stageName', 'workStationCode', 'SN',
     'inspectionTime', 'passFail', 'defectType', 'imageUrls', 'createdAt',
   ];
 
@@ -282,6 +296,7 @@ function toEolCsv(items) {
     lines.push([
       item.id,
       item.lineNumber,
+      item.view,
       item.stationName,
       item.stageName,
       item.workStationCode,
