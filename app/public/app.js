@@ -134,14 +134,59 @@ function renderKpiCards(summary, opts) {
   `).join('');
 }
 
+function isEmbedUrl(u) {
+  return /\/embed\/capture\//i.test(u) || (!/\.(jpe?g|png|gif|webp|bmp)(\?|$)/i.test(u) && /capture_id=/i.test(u));
+}
+
 function renderImages(urls = []) {
   return (urls || []).map((u) => {
-    const isEmbed = /\/embed\/capture\//i.test(u) || (!/\.(jpe?g|png|gif|webp|bmp)(\?|$)/i.test(u) && /capture_id=/i.test(u));
-    const media = isEmbed
-      ? `<iframe src="${u}" title="capture" loading="lazy" referrerpolicy="no-referrer"></iframe>`
-      : `<a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="inspection image" loading="lazy" referrerpolicy="no-referrer" /></a>`;
-    return `<figure class="img-card">${media}<figcaption><a href="${u}" target="_blank" rel="noopener">Abrir</a></figcaption></figure>`;
+    if (isEmbedUrl(u)) {
+      // Embed pages need a large viewport; small iframes crop the capture to a corner.
+      return `
+        <figure class="img-card img-card-embed">
+          <button type="button" class="embed-preview" data-embed-url="${u}">
+            <span class="embed-preview-title">Vista con boundings</span>
+            <span class="embed-preview-sub">Clic para ver completa (embed)</span>
+          </button>
+          <figcaption>
+            <button type="button" class="linkish" data-embed-url="${u}">Ver captura</button>
+            · <a href="${u}" target="_blank" rel="noopener">Abrir en pestaña</a>
+          </figcaption>
+        </figure>
+      `;
+    }
+    return `
+      <figure class="img-card">
+        <a href="${u}" target="_blank" rel="noopener">
+          <img src="${u}" alt="inspection image" loading="lazy" referrerpolicy="no-referrer" />
+        </a>
+        <figcaption><a href="${u}" target="_blank" rel="noopener">Abrir</a></figcaption>
+      </figure>
+    `;
   }).join('') || '<span>—</span>';
+}
+
+function openMediaLightbox(url) {
+  $('mediaLightboxTitle').textContent = 'Vista con boundings';
+  $('mediaLightboxOpen').href = url;
+  $('mediaLightboxFrame').src = url;
+  $('mediaLightbox').classList.remove('hidden');
+  $('mediaLightbox').setAttribute('aria-hidden', 'false');
+}
+
+function closeMediaLightbox() {
+  $('mediaLightbox').classList.add('hidden');
+  $('mediaLightbox').setAttribute('aria-hidden', 'true');
+  $('mediaLightboxFrame').src = 'about:blank';
+}
+
+function wireImageActions(root) {
+  root.querySelectorAll('[data-embed-url]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      openMediaLightbox(el.dataset.embedUrl);
+    });
+  });
 }
 
 function toLocalInputValue(d = new Date()) {
@@ -357,7 +402,9 @@ async function openImlaDetail(id) {
     <h3>Imágenes</h3>
     <div class="img-grid">${renderImages(item.imageUrls)}</div>
   `;
+  wireImageActions($('drawerBody'));
   $('drawer').classList.remove('hidden');
+  $('drawer').setAttribute('aria-hidden', 'false');
 }
 
 // -------------------- EOL --------------------
@@ -513,6 +560,7 @@ async function openEolDetail(id) {
     <h3>Imágenes</h3>
     <div class="img-grid">${renderImages(item.imageUrls)}</div>
   `;
+  wireImageActions($('drawerBody'));
   $('drawer').classList.remove('hidden');
 }
 
@@ -667,6 +715,10 @@ function wireUi() {
   $('closeDrawer').addEventListener('click', () => $('drawer').classList.add('hidden'));
   $('drawer').addEventListener('click', (e) => {
     if (e.target.id === 'drawer') $('drawer').classList.add('hidden');
+  });
+  $('closeMediaLightbox').addEventListener('click', closeMediaLightbox);
+  $('mediaLightbox').addEventListener('click', (e) => {
+    if (e.target.id === 'mediaLightbox') closeMediaLightbox();
   });
 
   $('deleteBeforeBtn').addEventListener('click', async () => {
