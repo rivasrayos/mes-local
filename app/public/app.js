@@ -118,7 +118,7 @@ function kpiItems(summary, { includeCarriers = true } = {}) {
   ];
   if (includeCarriers) {
     items.push({
-      label: 'Pases carriers',
+      label: summary.unit === 'cable' ? 'Pases ciclos' : 'Pases carriers',
       value: summary.carrierPasses ?? summary.uniqueCarriers,
     });
   }
@@ -455,7 +455,7 @@ function renderEolHomeLines(byLine = []) {
         <h3>${line.lineNumber}</h3>
         <button type="button" class="btn btn-line" data-eol-line="${line.lineNumber}">Abrir línea</button>
       </header>
-      <div class="kpi-row nested">${renderKpiCards(line, { includeCarriers: false })}</div>
+      <div class="kpi-row nested">${renderKpiCards(line)}</div>
     </section>
   `).join('');
   $('eolKpiRow').querySelectorAll('[data-eol-line]').forEach((el) => {
@@ -469,7 +469,7 @@ async function loadEolDashboard() {
   const data = await api(`/api/eol/dashboard?${eolQs()}`);
 
   if (route.page === 'line') {
-    $('eolKpiRow').innerHTML = `<section class="line-kpi-block current"><div class="kpi-row nested">${renderKpiCards(data.summary, { includeCarriers: false })}</div></section>`;
+    $('eolKpiRow').innerHTML = `<section class="line-kpi-block current"><div class="kpi-row nested">${renderKpiCards(data.summary)}</div></section>`;
     const labels = data.trend.map((t) => String(t.bucket).slice(5, 16).replace('T', ' '));
     makeChart('eolTrendChart', {
       type: 'line',
@@ -529,24 +529,30 @@ async function loadEolInspections() {
     passFail: $('eolFPassFail').value,
     defectType: $('eolFDefect').value.trim(),
     stationName: $('eolFStation').value.trim(),
-    stageName: $('eolFStage').value.trim(),
     limit: state.limit,
     offset: state.eolOffset,
   };
   const data = await api(`/api/eol/inspections?${eolQs(extra)}`);
   const tbody = document.querySelector('#eolInspTable tbody');
-  tbody.innerHTML = data.items.map((item) => `
+  tbody.innerHTML = data.items.map((item) => {
+    const sn = item.sn || item.SN || '';
+    const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
+    const cams = item.cameraCount != null
+      ? `${item.failCameraCount || 0}/${item.cameraCount}`
+      : '';
+    return `
     <tr>
       <td>${item.inspectionTime || ''}</td>
       <td>${item.lineNumber || ''}</td>
-      <td>${item.SN || ''}</td>
+      <td>${sn}</td>
       <td>${item.stationName || ''}</td>
-      <td>${item.stageName || ''}</td>
+      <td>${positions}</td>
+      <td title="fail cams / total cams">${cams}</td>
       <td><span class="badge ${(item.passFail || '').toLowerCase()}">${item.passFail || ''}</span></td>
       <td title="${item.defectType || ''}">${(item.defectType || '').slice(0, 40)}</td>
       <td><button class="btn" data-eol-id="${item.id}">Ver</button></td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
   tbody.querySelectorAll('button[data-eol-id]').forEach((btn) => {
     btn.addEventListener('click', () => openEolDetail(btn.dataset.eolId));
   });
@@ -557,24 +563,43 @@ async function loadEolInspections() {
 
 async function openEolDetail(id) {
   const item = await api(`/api/eol/inspections/${id}`);
+  const sn = item.sn || item.SN || '';
+  const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
+  const records = item.records || [];
+  const recordsHtml = records.length
+    ? records.map((r) => `
+        <article class="eol-cam-card">
+          <header>
+            <strong>Pos ${r.position ?? '—'}</strong>
+            · <span class="badge ${(r.passFail || '').toLowerCase()}">${r.passFail || ''}</span>
+            · ${r.view || r.cameraId || 'cam'}
+          </header>
+          <p class="muted">${r.cameraId || ''} · capture ${r.captureId || '—'}</p>
+          <p>${(r.defects || []).join(', ') || '—'}</p>
+          <div class="img-grid">${renderImages(r.imageUrls || [])}</div>
+        </article>
+      `).join('')
+    : '<p>—</p>';
+
   $('drawerBody').innerHTML = `
     <dl class="kv">
-      <dt>id</dt><dd>${item.id}</dd>
+      <dt>cable id</dt><dd>${item.id}</dd>
+      <dt>cycleId</dt><dd>${item.cycleId || ''}</dd>
       <dt>lineNumber</dt><dd>${item.lineNumber || ''}</dd>
       <dt>stationName</dt><dd>${item.stationName || ''}</dd>
-      <dt>stageName</dt><dd>${item.stageName || ''}</dd>
-      <dt>workStationCode</dt><dd>${item.workStationCode || ''}</dd>
-      <dt>SN</dt><dd>${item.SN || ''}</dd>
+      <dt>SN (cable)</dt><dd>${sn}</dd>
+      <dt>positions</dt><dd>${positions}</dd>
+      <dt>cameras</dt><dd>${item.failCameraCount || 0} fail / ${item.cameraCount || 0} total</dd>
       <dt>inspectionTime</dt><dd>${item.inspectionTime || ''}</dd>
       <dt>passFail</dt><dd>${item.passFail || ''}</dd>
       <dt>defectType</dt><dd>${item.defectType || ''}</dd>
-      <dt>createdAt</dt><dd>${item.createdAt || ''}</dd>
     </dl>
-    <h3>Imágenes</h3>
-    <div class="img-grid">${renderImages(item.imageUrls)}</div>
+    <h3>Cámaras / posiciones</h3>
+    <div class="eol-cam-list">${recordsHtml}</div>
   `;
   wireImageActions($('drawerBody'));
   $('drawer').classList.remove('hidden');
+  $('drawer').setAttribute('aria-hidden', 'false');
 }
 
 async function deleteEolHistory(payload) {
@@ -714,7 +739,6 @@ function wireUi() {
       passFail: $('eolFPassFail').value,
       defectType: $('eolFDefect').value.trim(),
       stationName: $('eolFStation').value.trim(),
-      stageName: $('eolFStage').value.trim(),
     })}`;
   });
 

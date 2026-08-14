@@ -285,7 +285,6 @@
         </select>
         <input id="eolFDefect" placeholder="Defect type" />
         <input id="eolFStation" placeholder="Station" />
-        <input id="eolFStage" placeholder="Stage" />
         <button id="eolApplyFilters" class="btn">Filtrar</button>
       </div>
       <div class="table-wrap">
@@ -294,9 +293,10 @@
             <tr>
               <th>Time</th>
               <th>Line</th>
-              <th>SN</th>
+              <th>SN (cable)</th>
               <th>Station</th>
-              <th>Stage</th>
+              <th>Pos</th>
+              <th>Cams</th>
               <th>Result</th>
               <th>Defects</th>
               <th></th>
@@ -315,7 +315,7 @@
     <section id="eol-tab-admin" class="panel">
       <article class="admin-card">
         <h2>Borrar histórico EOL</h2>
-        <p>Elimina inspecciones EOL. Esta acción no se puede deshacer.</p>
+        <p>Elimina ciclos, cables e inspecciones EOL. Esta acción no se puede deshacer.</p>
         <div class="admin-grid">
           <label class="field">
             <span>Borrar todo anterior a</span>

@@ -8,6 +8,7 @@ async function ensureSchema() {
       ADD COLUMN IF NOT EXISTS leg_mapping TEXT
   `);
 
+  // Legacy flat EOL table (kept for historical rows / old installs)
   await query(`
     CREATE TABLE IF NOT EXISTS eol_inspections (
       id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -32,6 +33,69 @@ async function ensureSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_inspection_time ON eol_inspections (inspection_time)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_created_at ON eol_inspections (created_at)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_station_name ON eol_inspections (station_name)`);
+
+  // Cycle-based EOL (5 cameras × positions → cables by SN)
+  await query(`
+    CREATE TABLE IF NOT EXISTS eol_cycles (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      cycle_timestamp  TIMESTAMPTZ,
+      line_number      TEXT,
+      station_name     TEXT,
+      stage_name       TEXT,
+      record_count     INTEGER NOT NULL DEFAULT 0,
+      raw_payload      JSONB NOT NULL,
+      received_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS eol_cables (
+      id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      cycle_id            UUID NOT NULL REFERENCES eol_cycles(id) ON DELETE CASCADE,
+      sn                  TEXT,
+      line_number         TEXT,
+      station_name        TEXT,
+      stage_name          TEXT,
+      positions           JSONB NOT NULL DEFAULT '[]'::jsonb,
+      pass_fail           TEXT,
+      defect_type         TEXT,
+      camera_count        INTEGER NOT NULL DEFAULT 0,
+      fail_camera_count   INTEGER NOT NULL DEFAULT 0,
+      inspection_time     TIMESTAMP WITHOUT TIME ZONE,
+      inspection_time_raw TEXT,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS eol_records (
+      id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      cycle_id            UUID NOT NULL REFERENCES eol_cycles(id) ON DELETE CASCADE,
+      cable_id            UUID NOT NULL REFERENCES eol_cables(id) ON DELETE CASCADE,
+      sn                  TEXT,
+      position            INTEGER,
+      camera_id           TEXT,
+      view_name           TEXT,
+      pass_fail           TEXT,
+      defects             JSONB NOT NULL DEFAULT '[]'::jsonb,
+      capture_id          TEXT,
+      inspection_time     TIMESTAMP WITHOUT TIME ZONE,
+      inspection_time_raw TEXT,
+      image_url           TEXT,
+      marked_image_url    TEXT,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_cycles_received ON eol_cycles (received_at)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_cycles_line ON eol_cycles (line_number)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_cables_cycle ON eol_cables (cycle_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_cables_line ON eol_cables (line_number)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_cables_sn ON eol_cables (sn)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_cables_pass ON eol_cables (pass_fail)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_cables_time ON eol_cables (inspection_time)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_records_cable ON eol_records (cable_id)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_records_cycle ON eol_records (cycle_id)`);
 }
 
 module.exports = { ensureSchema };
