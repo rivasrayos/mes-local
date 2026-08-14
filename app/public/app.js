@@ -537,9 +537,8 @@ async function loadEolInspections() {
   tbody.innerHTML = data.items.map((item) => {
     const sn = item.sn || item.SN || '';
     const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
-    const cams = item.cameraCount != null
-      ? `${item.failCameraCount || 0}/${item.cameraCount}`
-      : '';
+    const camFails = Number(item.failCameraCount) || 0;
+    const camFailsLabel = camFails > 0 ? String(camFails) : '—';
     return `
     <tr>
       <td>${item.inspectionTime || ''}</td>
@@ -547,7 +546,7 @@ async function loadEolInspections() {
       <td>${sn}</td>
       <td>${item.stationName || ''}</td>
       <td>${positions}</td>
-      <td title="fail cams / total cams">${cams}</td>
+      <td title="Cámaras con fail en este cable">${camFailsLabel}</td>
       <td><span class="badge ${(item.passFail || '').toLowerCase()}">${item.passFail || ''}</span></td>
       <td title="${item.defectType || ''}">${(item.defectType || '').slice(0, 40)}</td>
       <td><button class="btn" data-eol-id="${item.id}">Ver</button></td>
@@ -589,7 +588,7 @@ async function openEolDetail(id) {
       <dt>stationName</dt><dd>${item.stationName || ''}</dd>
       <dt>SN (cable)</dt><dd>${sn}</dd>
       <dt>positions</dt><dd>${positions}</dd>
-      <dt>cameras</dt><dd>${item.failCameraCount || 0} fail / ${item.cameraCount || 0} total</dd>
+      <dt>cam fails</dt><dd>${item.failCameraCount || 0}</dd>
       <dt>inspectionTime</dt><dd>${item.inspectionTime || ''}</dd>
       <dt>passFail</dt><dd>${item.passFail || ''}</dd>
       <dt>defectType</dt><dd>${item.defectType || ''}</dd>
