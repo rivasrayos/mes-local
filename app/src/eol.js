@@ -128,6 +128,18 @@ function buildCableFilters(q) {
   if (q.sn) add('c.sn ILIKE ?', `%${q.sn}%`);
   if (q.stationName) add('c.station_name ILIKE ?', `%${q.stationName}%`);
   if (q.defectType) add('c.defect_type ILIKE ?', `%${q.defectType}%`);
+  if (q.captureId) {
+    add(
+      `EXISTS (SELECT 1 FROM eol_records r WHERE r.cable_id = c.id AND r.capture_id ILIKE ?)`,
+      `%${q.captureId}%`
+    );
+  }
+  if (q.view) {
+    add(
+      `EXISTS (SELECT 1 FROM eol_records r WHERE r.cable_id = c.id AND r.view_name ILIKE ?)`,
+      `%${q.view}%`
+    );
+  }
   if (q.from) add('COALESCE(c.inspection_time, c.created_at::timestamp) >= ?::timestamp', q.from);
   if (q.to) add('COALESCE(c.inspection_time, c.created_at::timestamp) < ?::timestamp', q.to);
 
@@ -320,24 +332,23 @@ async function ingestEol(body) {
 }
 
 async function listEol(q = {}) {
-  const { whereSql, params } = buildRecordFilters(q);
+  const { whereSql, params } = buildCableFilters(q);
   const limit = Math.min(Number(q.limit) || 100, 1000);
   const offset = Math.max(Number(q.offset) || 0, 0);
 
   const countRes = await query(
     `SELECT COUNT(*)::int AS total
-     FROM eol_records r
-     JOIN eol_cables c ON c.id = r.cable_id
+     FROM eol_cables c
      ${whereSql}`,
     params
   );
 
   const listRes = await query(
-    `SELECT r.*, c.line_number, c.station_name
-     FROM eol_records r
-     JOIN eol_cables c ON c.id = r.cable_id
+    `SELECT c.*, cy.cycle_timestamp
+     FROM eol_cables c
+     JOIN eol_cycles cy ON cy.id = c.cycle_id
      ${whereSql}
-     ORDER BY COALESCE(r.inspection_time, r.created_at::timestamp) DESC, r.created_at DESC
+     ORDER BY COALESCE(c.inspection_time, c.created_at::timestamp) DESC, c.created_at DESC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   );
@@ -346,7 +357,7 @@ async function listEol(q = {}) {
     total: countRes.rows[0].total,
     limit,
     offset,
-    items: listRes.rows.map(mapRecord),
+    items: listRes.rows.map(mapCable),
   };
 }
 
@@ -526,9 +537,9 @@ async function deleteEolByDateRange({ from, to, before }) {
 
 function toEolCsv(items) {
   const headers = [
-    'id', 'cableId', 'cycleId', 'sn', 'lineNumber', 'stationName',
-    'position', 'cameraId', 'view', 'captureId',
-    'passFail', 'defects', 'inspectionTime',
+    'id', 'cycleId', 'sn', 'lineNumber', 'stationName', 'positions',
+    'passFail', 'defectType', 'cameraCount', 'failCameraCount',
+    'inspectionTime', 'createdAt',
   ];
   const escape = (v) => {
     const s = v == null ? '' : String(v);
@@ -539,18 +550,17 @@ function toEolCsv(items) {
   for (const item of items) {
     lines.push([
       item.id,
-      item.cableId,
       item.cycleId,
       item.sn,
       item.lineNumber,
       item.stationName,
-      item.position,
-      item.cameraId,
-      item.view,
-      item.captureId,
+      Array.isArray(item.positions) ? item.positions.join('|') : '',
       item.passFail,
-      Array.isArray(item.defects) ? item.defects.join('|') : (item.defectType || ''),
+      item.defectType,
+      item.cameraCount,
+      item.failCameraCount,
       item.inspectionTime,
+      item.createdAt,
     ].map(escape).join(','));
   }
   return `${lines.join('\n')}\n`;

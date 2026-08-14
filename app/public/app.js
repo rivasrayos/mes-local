@@ -538,20 +538,18 @@ async function loadEolInspections() {
   const tbody = document.querySelector('#eolInspTable tbody');
   tbody.innerHTML = data.items.map((item) => {
     const sn = item.sn || item.SN || '';
-    const defects = Array.isArray(item.defects) ? item.defects.join(', ') : (item.defectType || '');
-    const openId = item.cableId || item.id;
-    const camLabel = item.view || item.cameraId || '—';
+    const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
+    const camFails = Number(item.failCameraCount) || 0;
     return `
     <tr>
       <td>${item.inspectionTime || ''}</td>
       <td>${item.lineNumber || ''}</td>
       <td>${sn}</td>
-      <td>${item.position ?? ''}</td>
-      <td title="${item.cameraId || ''}">${camLabel}</td>
-      <td>${item.captureId || ''}</td>
+      <td>${positions || '—'}</td>
+      <td title="Cámaras con fail">${camFails > 0 ? camFails : '—'}</td>
       <td><span class="badge ${(item.passFail || '').toLowerCase()}">${item.passFail || ''}</span></td>
-      <td title="${defects}">${defects.slice(0, 40)}</td>
-      <td><button class="btn" data-eol-id="${openId}">Ver</button></td>
+      <td title="${item.defectType || ''}">${(item.defectType || '').slice(0, 40)}</td>
+      <td><button class="btn" data-eol-id="${item.id}">Ver</button></td>
     </tr>`;
   }).join('');
   tbody.querySelectorAll('button[data-eol-id]').forEach((btn) => {
