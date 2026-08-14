@@ -479,11 +479,18 @@ async function loadEolDashboard() {
 
   if (route.page === 'line') {
     const cams = data.byCamera || [];
+    const camBlocks = cams.map((cam) => `
+      <section class="line-kpi-block current kpi-view-cam" data-cam="${cam.view}">
+        <header class="line-kpi-header"><h3>${cam.view}</h3></header>
+        <div class="kpi-row nested">${renderKpiCards(cam, { includeCarriers: false })}</div>
+      </section>
+    `).join('');
     $('eolKpiRow').innerHTML = `
       <section class="line-kpi-block current">
         <header class="line-kpi-header"><h3>General (cables)</h3></header>
         <div class="kpi-row nested">${renderKpiCards(data.summary)}</div>
       </section>
+      ${camBlocks}
     `;
 
     const lineOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } };
@@ -528,46 +535,25 @@ async function loadEolDashboard() {
     });
 
     const camCharts = $('eolCamCharts');
-    camCharts.className = 'eol-cam-accordions wide-span';
+    camCharts.className = 'charts-grid wide-span';
     camCharts.innerHTML = cams.map((cam) => {
       const safe = String(cam.view).replace(/[^a-zA-Z0-9_-]/g, '_');
-      const rate = fmtPct(cam.passRate);
       return `
-        <details class="eol-cam-panel kpi-view-cam" data-cam="${cam.view}" data-cam-safe="${safe}">
-          <summary>
-            <span class="eol-cam-title">${cam.view}</span>
-            <span class="eol-cam-meta">
-              <span class="badge pass">${rate} pass</span>
-              <span>${cam.passCount || 0} pass</span>
-              ·
-              <span>${cam.failCount || 0} fail</span>
-              ·
-              <span>${cam.total || 0} capturas</span>
-            </span>
-          </summary>
-          <div class="eol-cam-body">
-            <div class="kpi-row nested">${renderKpiCards(cam, { includeCarriers: false })}</div>
-            <div class="charts-grid">
-              <article class="chart-block">
-                <h2>Tendencia · ${cam.view}</h2>
-                <canvas id="eolTrend_${safe}"></canvas>
-              </article>
-              <article class="chart-block">
-                <h2>Defectos · ${cam.view}</h2>
-                <canvas id="eolDefect_${safe}"></canvas>
-              </article>
-            </div>
-          </div>
-        </details>
-      `;
-    }).join('') || '<p class="window-meta">Sin datos por cámara en esta ventana.</p>';
+      <article class="chart-block">
+        <h2>Tendencia · ${cam.view}</h2>
+        <canvas id="eolTrend_${safe}"></canvas>
+      </article>
+      <article class="chart-block">
+        <h2>Defectos · ${cam.view}</h2>
+        <canvas id="eolDefect_${safe}"></canvas>
+      </article>
+    `;
+    }).join('');
 
-    const ensureCamCharts = (panel) => {
-      if (panel.dataset.chartsReady === '1') return;
-      const cam = panel.dataset.cam;
-      const safe = panel.dataset.camSafe;
-      const trend = (data.trendByCamera && data.trendByCamera[cam]) || [];
-      const defects = (data.defectsByCamera && data.defectsByCamera[cam]) || [];
+    cams.forEach((cam) => {
+      const safe = String(cam.view).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const trend = (data.trendByCamera && data.trendByCamera[cam.view]) || [];
+      const defects = (data.defectsByCamera && data.defectsByCamera[cam.view]) || [];
       makeChart(`eolTrend_${safe}`, { type: 'line', data: passFailLine(trend), options: lineOpts });
       makeChart(`eolDefect_${safe}`, {
         type: 'bar',
@@ -576,16 +562,6 @@ async function loadEolDashboard() {
           datasets: [{ label: 'Count', data: defects.map((d) => d.count), backgroundColor: '#0f6e7c' }],
         },
         options: barOpts,
-      });
-      panel.querySelectorAll('.chart-block canvas').forEach((c) => {
-        c.parentElement.style.height = '280px';
-      });
-      panel.dataset.chartsReady = '1';
-    };
-
-    camCharts.querySelectorAll('details.eol-cam-panel').forEach((panel) => {
-      panel.addEventListener('toggle', () => {
-        if (panel.open) ensureCamCharts(panel);
       });
     });
 
@@ -621,7 +597,7 @@ async function loadEolDashboard() {
     $('eolWindowMeta').textContent = `EOL · ${data.window.from} → ${data.window.to}`;
   }
 
-  document.querySelectorAll('#view-eol .charts-grid:not(.hidden) > .chart-block canvas').forEach((c) => {
+  document.querySelectorAll('#view-eol .charts-grid:not(.hidden) .chart-block canvas').forEach((c) => {
     c.parentElement.style.height = '300px';
   });
 }
