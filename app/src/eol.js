@@ -92,28 +92,6 @@ function mapRecord(row) {
   };
 }
 
-function buildRecordFilters(q) {
-  const where = ['1=1'];
-  const params = [];
-  let i = 1;
-  const add = (sql, value) => {
-    where.push(sql.replace('?', `$${i++}`));
-    params.push(value);
-  };
-
-  if (q.lineNumber) add('c.line_number = ?', q.lineNumber);
-  if (q.passFail) add('r.pass_fail = ?', q.passFail);
-  if (q.sn) add('r.sn ILIKE ?', `%${q.sn}%`);
-  if (q.stationName) add('c.station_name ILIKE ?', `%${q.stationName}%`);
-  if (q.defectType) add('r.defects::text ILIKE ?', `%${q.defectType}%`);
-  if (q.captureId) add('r.capture_id ILIKE ?', `%${q.captureId}%`);
-  if (q.view) add('r.view_name ILIKE ?', `%${q.view}%`);
-  if (q.from) add('COALESCE(r.inspection_time, r.created_at::timestamp) >= ?::timestamp', q.from);
-  if (q.to) add('COALESCE(r.inspection_time, r.created_at::timestamp) < ?::timestamp', q.to);
-
-  return { whereSql: `WHERE ${where.join(' AND ')}`, params };
-}
-
 function buildCableFilters(q) {
   const where = ['1=1'];
   const params = [];
