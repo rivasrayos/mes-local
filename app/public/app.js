@@ -526,6 +526,7 @@ async function loadEolInspections() {
   updateEolChrome(getRoute());
   const extra = {
     sn: $('eolFSn').value.trim(),
+    captureId: $('eolFCaptureId').value.trim(),
     passFail: $('eolFPassFail').value,
     defectType: $('eolFDefect').value.trim(),
     stationName: $('eolFStation').value.trim(),
@@ -536,20 +537,19 @@ async function loadEolInspections() {
   const tbody = document.querySelector('#eolInspTable tbody');
   tbody.innerHTML = data.items.map((item) => {
     const sn = item.sn || item.SN || '';
-    const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
-    const camFails = Number(item.failCameraCount) || 0;
-    const camFailsLabel = camFails > 0 ? String(camFails) : '—';
+    const defects = Array.isArray(item.defects) ? item.defects.join(', ') : (item.defectType || '');
+    const openId = item.cableId || item.id;
     return `
     <tr>
       <td>${item.inspectionTime || ''}</td>
       <td>${item.lineNumber || ''}</td>
       <td>${sn}</td>
-      <td>${item.stationName || ''}</td>
-      <td>${positions}</td>
-      <td title="Cámaras con fail en este cable">${camFailsLabel}</td>
+      <td>${item.position ?? ''}</td>
+      <td title="${item.cameraId || ''}">${item.view || item.cameraId || ''}</td>
+      <td>${item.captureId || ''}</td>
       <td><span class="badge ${(item.passFail || '').toLowerCase()}">${item.passFail || ''}</span></td>
-      <td title="${item.defectType || ''}">${(item.defectType || '').slice(0, 40)}</td>
-      <td><button class="btn" data-eol-id="${item.id}">Ver</button></td>
+      <td title="${defects}">${defects.slice(0, 40)}</td>
+      <td><button class="btn" data-eol-id="${openId}">Ver</button></td>
     </tr>`;
   }).join('');
   tbody.querySelectorAll('button[data-eol-id]').forEach((btn) => {
@@ -566,18 +566,33 @@ async function openEolDetail(id) {
   const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
   const records = item.records || [];
   const recordsHtml = records.length
-    ? records.map((r) => `
-        <article class="eol-cam-card">
-          <header>
-            <strong>Pos ${r.position ?? '—'}</strong>
-            · <span class="badge ${(r.passFail || '').toLowerCase()}">${r.passFail || ''}</span>
-            · ${r.view || r.cameraId || 'cam'}
-          </header>
-          <p class="muted">${r.cameraId || ''} · capture ${r.captureId || '—'}</p>
-          <p>${(r.defects || []).join(', ') || '—'}</p>
-          <div class="img-grid">${renderImages(r.imageUrls || [])}</div>
-        </article>
-      `).join('')
+    ? `
+      <div class="table-wrap">
+        <table class="eol-cam-table">
+          <thead>
+            <tr>
+              <th>Pos</th>
+              <th>Camera</th>
+              <th>Capture ID</th>
+              <th>Result</th>
+              <th>Defects</th>
+              <th>Images</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${records.map((r) => `
+              <tr>
+                <td>${r.position ?? '—'}</td>
+                <td title="${r.cameraId || ''}">${r.view || r.cameraId || '—'}</td>
+                <td>${r.captureId || '—'}</td>
+                <td><span class="badge ${(r.passFail || '').toLowerCase()}">${r.passFail || ''}</span></td>
+                <td>${(r.defects || []).join(', ') || '—'}</td>
+                <td><div class="img-grid compact">${renderImages(r.imageUrls || [])}</div></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`
     : '<p>—</p>';
 
   $('drawerBody').innerHTML = `
@@ -594,7 +609,7 @@ async function openEolDetail(id) {
       <dt>defectType</dt><dd>${item.defectType || ''}</dd>
     </dl>
     <h3>Cámaras / posiciones</h3>
-    <div class="eol-cam-list">${recordsHtml}</div>
+    ${recordsHtml}
   `;
   wireImageActions($('drawerBody'));
   $('drawer').classList.remove('hidden');
@@ -735,6 +750,7 @@ function wireUi() {
   $('eolExportBtn').addEventListener('click', () => {
     window.location.href = `/api/eol/inspections/export.csv?${eolQs({
       sn: $('eolFSn').value.trim(),
+      captureId: $('eolFCaptureId').value.trim(),
       passFail: $('eolFPassFail').value,
       defectType: $('eolFDefect').value.trim(),
       stationName: $('eolFStation').value.trim(),

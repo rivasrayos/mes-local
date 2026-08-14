@@ -52,19 +52,44 @@ function mapRecord(row) {
     cycleId: row.cycle_id,
     cableId: row.cable_id,
     sn: row.sn,
+    lineNumber: row.line_number || '',
+    stationName: row.station_name || '',
     position: row.position,
     cameraId: row.camera_id,
     view: row.view_name || '',
     passFail: row.pass_fail,
     defects: row.defects || [],
-    captureId: row.capture_id,
+    defectType: Array.isArray(row.defects) ? row.defects.join(', ') : (row.defect_type || ''),
+    captureId: row.capture_id || '',
     inspectionTime: row.inspection_time_raw || (row.inspection_time
       ? String(row.inspection_time).replace('T', ' ').slice(0, 19)
       : null),
     imageUrl: row.image_url || '',
     markedImageUrl: row.marked_image_url || '',
     imageUrls: [row.image_url, row.marked_image_url].filter(Boolean),
+    unit: 'camera',
   };
+}
+
+function buildRecordFilters(q) {
+  const where = ['1=1'];
+  const params = [];
+  let i = 1;
+  const add = (sql, value) => {
+    where.push(sql.replace('?', `$${i++}`));
+    params.push(value);
+  };
+
+  if (q.lineNumber) add('c.line_number = ?', q.lineNumber);
+  if (q.passFail) add('r.pass_fail = ?', q.passFail);
+  if (q.sn) add('r.sn ILIKE ?', `%${q.sn}%`);
+  if (q.stationName) add('c.station_name ILIKE ?', `%${q.stationName}%`);
+  if (q.defectType) add('r.defects::text ILIKE ?', `%${q.defectType}%`);
+  if (q.captureId) add('r.capture_id ILIKE ?', `%${q.captureId}%`);
+  if (q.from) add('COALESCE(r.inspection_time, r.created_at::timestamp) >= ?::timestamp', q.from);
+  if (q.to) add('COALESCE(r.inspection_time, r.created_at::timestamp) < ?::timestamp', q.to);
+
+  return { whereSql: `WHERE ${where.join(' AND ')}`, params };
 }
 
 function buildCableFilters(q) {
@@ -273,23 +298,24 @@ async function ingestEol(body) {
 }
 
 async function listEol(q = {}) {
-  const { whereSql, params } = buildCableFilters(q);
+  const { whereSql, params } = buildRecordFilters(q);
   const limit = Math.min(Number(q.limit) || 100, 1000);
   const offset = Math.max(Number(q.offset) || 0, 0);
 
   const countRes = await query(
     `SELECT COUNT(*)::int AS total
-     FROM eol_cables c
+     FROM eol_records r
+     JOIN eol_cables c ON c.id = r.cable_id
      ${whereSql}`,
     params
   );
 
   const listRes = await query(
-    `SELECT c.*, cy.cycle_timestamp
-     FROM eol_cables c
-     JOIN eol_cycles cy ON cy.id = c.cycle_id
+    `SELECT r.*, c.line_number, c.station_name
+     FROM eol_records r
+     JOIN eol_cables c ON c.id = r.cable_id
      ${whereSql}
-     ORDER BY COALESCE(c.inspection_time, c.created_at::timestamp) DESC, c.created_at DESC
+     ORDER BY COALESCE(r.inspection_time, r.created_at::timestamp) DESC, r.created_at DESC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   );
@@ -298,7 +324,7 @@ async function listEol(q = {}) {
     total: countRes.rows[0].total,
     limit,
     offset,
-    items: listRes.rows.map(mapCable),
+    items: listRes.rows.map(mapRecord),
   };
 }
 
@@ -478,9 +504,9 @@ async function deleteEolByDateRange({ from, to, before }) {
 
 function toEolCsv(items) {
   const headers = [
-    'id', 'cycleId', 'sn', 'lineNumber', 'stationName', 'positions',
-    'passFail', 'defectType', 'cameraCount', 'failCameraCount',
-    'inspectionTime', 'createdAt',
+    'id', 'cableId', 'cycleId', 'sn', 'lineNumber', 'stationName',
+    'position', 'cameraId', 'view', 'captureId',
+    'passFail', 'defects', 'inspectionTime',
   ];
   const escape = (v) => {
     const s = v == null ? '' : String(v);
@@ -491,17 +517,18 @@ function toEolCsv(items) {
   for (const item of items) {
     lines.push([
       item.id,
+      item.cableId,
       item.cycleId,
       item.sn,
       item.lineNumber,
       item.stationName,
-      Array.isArray(item.positions) ? item.positions.join('|') : '',
+      item.position,
+      item.cameraId,
+      item.view,
+      item.captureId,
       item.passFail,
-      item.defectType,
-      item.cameraCount,
-      item.failCameraCount,
+      Array.isArray(item.defects) ? item.defects.join('|') : (item.defectType || ''),
       item.inspectionTime,
-      item.createdAt,
     ].map(escape).join(','));
   }
   return `${lines.join('\n')}\n`;

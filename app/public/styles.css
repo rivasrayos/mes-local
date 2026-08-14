@@ -685,6 +685,25 @@ th {
   gap: 0.85rem;
 }
 
+.eol-cam-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.eol-cam-table th,
+.eol-cam-table td {
+  text-align: left;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--border, #d5dde3);
+  vertical-align: top;
+}
+
+.eol-cam-table .img-grid.compact {
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 0.35rem;
+}
+
 .eol-cam-card {
   border: 1px solid var(--border, #d5dde3);
   border-radius: 8px;
