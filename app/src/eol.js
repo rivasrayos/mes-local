@@ -53,6 +53,7 @@ function mapCable(row) {
     stationName: row.station_name,
     stageName: row.stage_name || '',
     positions: row.positions || [],
+    captureIds: row.capture_ids || [],
     passFail: row.pass_fail,
     defectType: row.defect_type || '',
     cameraCount: row.camera_count || 0,
@@ -104,18 +105,11 @@ function buildCableFilters(q) {
   if (q.lineNumber) add('c.line_number = ?', q.lineNumber);
   if (q.passFail) add('c.pass_fail = ?', q.passFail);
   if (q.sn) add('c.sn ILIKE ?', `%${q.sn}%`);
-  if (q.stationName) add('c.station_name ILIKE ?', `%${q.stationName}%`);
   if (q.defectType) add('c.defect_type ILIKE ?', `%${q.defectType}%`);
   if (q.captureId) {
     add(
       `EXISTS (SELECT 1 FROM eol_records r WHERE r.cable_id = c.id AND r.capture_id ILIKE ?)`,
       `%${q.captureId}%`
-    );
-  }
-  if (q.view) {
-    add(
-      `EXISTS (SELECT 1 FROM eol_records r WHERE r.cable_id = c.id AND r.view_name ILIKE ?)`,
-      `%${q.view}%`
     );
   }
   if (q.from) add('COALESCE(c.inspection_time, c.created_at::timestamp) >= ?::timestamp', q.from);
@@ -322,7 +316,19 @@ async function listEol(q = {}) {
   );
 
   const listRes = await query(
-    `SELECT c.*, cy.cycle_timestamp
+    `SELECT c.*, cy.cycle_timestamp,
+            COALESCE((
+              SELECT jsonb_agg(x.capture_id ORDER BY x.position NULLS LAST, x.view_name, x.camera_id, x.capture_id)
+              FROM (
+                SELECT DISTINCT ON (r.capture_id)
+                       r.capture_id, r.position, r.view_name, r.camera_id
+                FROM eol_records r
+                WHERE r.cable_id = c.id
+                  AND r.capture_id IS NOT NULL
+                  AND r.capture_id <> ''
+                ORDER BY r.capture_id, r.position NULLS LAST, r.view_name, r.camera_id
+              ) x
+            ), '[]'::jsonb) AS capture_ids
      FROM eol_cables c
      JOIN eol_cycles cy ON cy.id = c.cycle_id
      ${whereSql}
@@ -515,7 +521,7 @@ async function deleteEolByDateRange({ from, to, before }) {
 
 function toEolCsv(items) {
   const headers = [
-    'id', 'cycleId', 'sn', 'lineNumber', 'stationName', 'positions',
+    'id', 'cycleId', 'sn', 'lineNumber', 'stationName', 'positions', 'captureIds',
     'passFail', 'defectType', 'cameraCount', 'failCameraCount',
     'inspectionTime', 'createdAt',
   ];
@@ -533,6 +539,7 @@ function toEolCsv(items) {
       item.lineNumber,
       item.stationName,
       Array.isArray(item.positions) ? item.positions.join('|') : '',
+      Array.isArray(item.captureIds) ? item.captureIds.join('|') : '',
       item.passFail,
       item.defectType,
       item.cameraCount,

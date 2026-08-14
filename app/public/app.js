@@ -527,10 +527,8 @@ async function loadEolInspections() {
   const extra = {
     sn: $('eolFSn').value.trim(),
     captureId: $('eolFCaptureId').value.trim(),
-    view: $('eolFView').value.trim(),
     passFail: $('eolFPassFail').value,
     defectType: $('eolFDefect').value.trim(),
-    stationName: $('eolFStation').value.trim(),
     limit: state.limit,
     offset: state.eolOffset,
   };
@@ -539,6 +537,7 @@ async function loadEolInspections() {
   tbody.innerHTML = data.items.map((item) => {
     const sn = item.sn || item.SN || '';
     const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
+    const captureIds = Array.isArray(item.captureIds) ? item.captureIds.join(', ') : '';
     const camFails = Number(item.failCameraCount) || 0;
     return `
     <tr>
@@ -546,6 +545,7 @@ async function loadEolInspections() {
       <td>${item.lineNumber || ''}</td>
       <td>${sn}</td>
       <td>${positions || '—'}</td>
+      <td title="${captureIds}">${captureIds || '—'}</td>
       <td title="Cámaras con fail">${camFails > 0 ? camFails : '—'}</td>
       <td><span class="badge ${(item.passFail || '').toLowerCase()}">${item.passFail || ''}</span></td>
       <td title="${item.defectType || ''}">${(item.defectType || '').slice(0, 40)}</td>
@@ -751,10 +751,8 @@ function wireUi() {
     window.location.href = `/api/eol/inspections/export.csv?${eolQs({
       sn: $('eolFSn').value.trim(),
       captureId: $('eolFCaptureId').value.trim(),
-      view: $('eolFView').value.trim(),
       passFail: $('eolFPassFail').value,
       defectType: $('eolFDefect').value.trim(),
-      stationName: $('eolFStation').value.trim(),
     })}`;
   });
 
