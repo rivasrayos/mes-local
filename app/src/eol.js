@@ -1,5 +1,6 @@
 const { query, withTransaction } = require('./db');
 const { parseInspectionTime, formatInTz } = require('./time');
+const config = require('./config');
 
 const DEFAULT_LEG_MAPPING = '1a2a3a4a1b2b3b4b';
 
@@ -16,6 +17,26 @@ function parseIsoOrLocal(raw) {
     return { raw: asString, local: formatInTz(d) };
   }
   return { raw: asString, local: null };
+}
+
+function hostFromUrl(url) {
+  const m = String(url || '').match(/^https?:\/\/([^/:]+)/i);
+  return m ? m[1] : '';
+}
+
+/** Prefer payload view/cameraName; else map cameraId / image host → EOL1..EOL5 */
+function resolveCameraView(rec = {}) {
+  const explicit = rec.view || rec.cameraName || rec.camName || rec.cam;
+  if (explicit && String(explicit).trim()) return String(explicit).trim();
+
+  const map = config.eolCameraMap || {};
+  const cameraId = String(rec.cameraId || '').trim();
+  if (cameraId && map[cameraId]) return map[cameraId];
+
+  const host = hostFromUrl(rec.imageUrl) || hostFromUrl(rec.markedImageUrl);
+  if (host && map[host]) return map[host];
+
+  return '';
 }
 
 function isFail(value) {
@@ -56,7 +77,7 @@ function mapRecord(row) {
     stationName: row.station_name || '',
     position: row.position,
     cameraId: row.camera_id,
-    view: row.view_name || '',
+    view: row.view_name || config.eolCameraMap[row.camera_id] || config.eolCameraMap[hostFromUrl(row.image_url)] || '',
     passFail: row.pass_fail,
     defects: row.defects || [],
     defectType: Array.isArray(row.defects) ? row.defects.join(', ') : (row.defect_type || ''),
@@ -86,6 +107,7 @@ function buildRecordFilters(q) {
   if (q.stationName) add('c.station_name ILIKE ?', `%${q.stationName}%`);
   if (q.defectType) add('r.defects::text ILIKE ?', `%${q.defectType}%`);
   if (q.captureId) add('r.capture_id ILIKE ?', `%${q.captureId}%`);
+  if (q.view) add('r.view_name ILIKE ?', `%${q.view}%`);
   if (q.from) add('COALESCE(r.inspection_time, r.created_at::timestamp) >= ?::timestamp', q.from);
   if (q.to) add('COALESCE(r.inspection_time, r.created_at::timestamp) < ?::timestamp', q.to);
 
@@ -214,7 +236,7 @@ async function insertCycleWithRecords(client, {
           sn,
           rec.position != null ? Number(rec.position) : null,
           rec.cameraId || '',
-          rec.view || '',
+          resolveCameraView(rec),
           isFail(rec.passFail) ? 'Fail' : 'Pass',
           JSON.stringify(Array.isArray(rec.defects) ? rec.defects : []),
           rec.captureId != null ? String(rec.captureId) : '',
