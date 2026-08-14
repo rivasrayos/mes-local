@@ -108,15 +108,24 @@ function makeChart(id, config) {
 }
 
 function kpiItems(summary, { includeCarriers = true } = {}) {
+  const totalLabel = summary.unit === 'cable'
+    ? 'Cables'
+    : summary.unit === 'camera'
+      ? 'Capturas'
+      : 'Total';
   const items = [
-    { label: summary.unit === 'cable' ? 'Cables' : 'Total', value: summary.total },
+    { label: totalLabel, value: summary.total },
     { label: 'Pass', value: summary.passCount, cls: 'pass' },
     { label: 'Fail', value: summary.failCount, cls: 'fail' },
     { label: 'Pass rate', value: fmtPct(summary.passRate), cls: 'pass' },
     { label: 'Fail rate', value: fmtPct(summary.failRate), cls: 'fail' },
-    { label: 'SN únicos', value: summary.uniqueSns },
   ];
-  if (includeCarriers) {
+  if (summary.unit !== 'camera') {
+    items.push({ label: 'SN únicos', value: summary.uniqueSns });
+  } else if (summary.uniqueSns != null) {
+    items.push({ label: 'SN únicos', value: summary.uniqueSns });
+  }
+  if (includeCarriers && summary.unit !== 'camera') {
     items.push({
       label: summary.unit === 'cable' ? 'Pases ciclos' : 'Pases carriers',
       value: summary.carrierPasses ?? summary.uniqueCarriers,
@@ -469,29 +478,92 @@ async function loadEolDashboard() {
   const data = await api(`/api/eol/dashboard?${eolQs()}`);
 
   if (route.page === 'line') {
-    $('eolKpiRow').innerHTML = `<section class="line-kpi-block current"><div class="kpi-row nested">${renderKpiCards(data.summary)}</div></section>`;
-    const labels = data.trend.map((t) => String(t.bucket).slice(5, 16).replace('T', ' '));
-    makeChart('eolTrendChart', {
-      type: 'line',
+    const cams = data.byCamera || [];
+    const camBlocks = cams.map((cam, idx) => `
+      <section class="line-kpi-block current kpi-view-cam" data-cam="${cam.view}">
+        <header class="line-kpi-header"><h3>${cam.view}</h3></header>
+        <div class="kpi-row nested">${renderKpiCards(cam, { includeCarriers: false })}</div>
+      </section>
+    `).join('');
+    $('eolKpiRow').innerHTML = `
+      <section class="line-kpi-block current">
+        <header class="line-kpi-header"><h3>General (cables)</h3></header>
+        <div class="kpi-row nested">${renderKpiCards(data.summary)}</div>
+      </section>
+      ${camBlocks}
+    `;
+
+    const lineOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } };
+    const barOpts = { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+    const passFailLine = (rows) => ({
+      labels: (rows || []).map((t) => String(t.bucket).slice(5, 16).replace('T', ' ')),
+      datasets: [
+        { label: 'Pass', data: (rows || []).map((t) => t.passCount), borderColor: '#0f7a45', tension: 0.25 },
+        { label: 'Fail', data: (rows || []).map((t) => t.failCount), borderColor: '#b42318', tension: 0.25 },
+      ],
+    });
+
+    makeChart('eolCamYieldChart', {
+      type: 'bar',
       data: {
-        labels,
+        labels: cams.map((c) => c.view),
         datasets: [
-          { label: 'Pass', data: data.trend.map((t) => t.passCount), borderColor: '#0f7a45', tension: 0.25 },
-          { label: 'Fail', data: data.trend.map((t) => t.failCount), borderColor: '#b42318', tension: 0.25 },
+          { label: 'Pass', data: cams.map((c) => c.passCount || 0), backgroundColor: '#0f6e7c', stack: 'cam' },
+          { label: 'Fail', data: cams.map((c) => c.failCount || 0), backgroundColor: '#b42318', stack: 'cam' },
         ],
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+        plugins: { legend: { position: 'bottom' } },
+      },
+    });
+
+    makeChart('eolTrendChart', {
+      type: 'line',
+      data: passFailLine(data.trend || []),
+      options: lineOpts,
     });
     makeChart('eolDefectChart', {
       type: 'bar',
       data: {
-        labels: data.defects.map((d) => d.defect),
-        datasets: [{ label: 'Count', data: data.defects.map((d) => d.count), backgroundColor: '#c45c26' }],
+        labels: (data.defects || []).map((d) => d.defect),
+        datasets: [{ label: 'Count', data: (data.defects || []).map((d) => d.count), backgroundColor: '#5a6b78' }],
       },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+      options: barOpts,
     });
+
+    const camCharts = $('eolCamCharts');
+    camCharts.innerHTML = cams.map((cam) => `
+      <article class="chart-block">
+        <h2>Tendencia · ${cam.view}</h2>
+        <canvas id="eolTrend_${cam.view}"></canvas>
+      </article>
+      <article class="chart-block">
+        <h2>Defectos · ${cam.view}</h2>
+        <canvas id="eolDefect_${cam.view}"></canvas>
+      </article>
+    `).join('');
+
+    cams.forEach((cam) => {
+      const trend = (data.trendByCamera && data.trendByCamera[cam.view]) || [];
+      const defects = (data.defectsByCamera && data.defectsByCamera[cam.view]) || [];
+      makeChart(`eolTrend_${cam.view}`, { type: 'line', data: passFailLine(trend), options: lineOpts });
+      makeChart(`eolDefect_${cam.view}`, {
+        type: 'bar',
+        data: {
+          labels: defects.map((d) => d.defect),
+          datasets: [{ label: 'Count', data: defects.map((d) => d.count), backgroundColor: '#0f6e7c' }],
+        },
+        options: barOpts,
+      });
+    });
+
     $('eolWindowMeta').textContent = `Línea ${route.line} · ${data.window.from} → ${data.window.to}`;
   } else {
+    const camCharts = $('eolCamCharts');
+    if (camCharts) camCharts.innerHTML = '';
     renderEolHomeLines(data.byLine);
     makeChart('eolLineChart', {
       type: 'bar',

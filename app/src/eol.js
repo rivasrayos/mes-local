@@ -435,6 +435,121 @@ async function getEolDashboard(q = {}) {
     params
   );
 
+  // Per-camera yield (EOL1…EOL5) from camera records in the same filter window
+  const camRes = await query(
+    `SELECT
+       COALESCE(NULLIF(r.view_name, ''), r.camera_id, '(unknown)') AS camera_key,
+       r.camera_id,
+       COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE LOWER(r.pass_fail) = 'pass')::int AS pass_count,
+       COUNT(*) FILTER (WHERE LOWER(r.pass_fail) = 'fail')::int AS fail_count,
+       COUNT(DISTINCT r.sn) FILTER (WHERE r.sn IS NOT NULL AND r.sn <> '')::int AS unique_sns
+     FROM eol_records r
+     JOIN eol_cables c ON c.id = r.cable_id
+     ${whereSql}
+     GROUP BY 1, 2
+     ORDER BY 1`,
+    params
+  );
+
+  const camTrendRes = await query(
+    `SELECT
+       COALESCE(NULLIF(r.view_name, ''), r.camera_id, '(unknown)') AS camera_key,
+       date_trunc('hour', COALESCE(r.inspection_time, r.created_at::timestamp)) AS bucket,
+       COUNT(*)::int AS total,
+       COUNT(*) FILTER (WHERE LOWER(r.pass_fail) = 'pass')::int AS pass_count,
+       COUNT(*) FILTER (WHERE LOWER(r.pass_fail) = 'fail')::int AS fail_count
+     FROM eol_records r
+     JOIN eol_cables c ON c.id = r.cable_id
+     ${whereSql}
+     GROUP BY 1, 2
+     ORDER BY 1, 2`,
+    params
+  );
+
+  const camDefectRes = await query(
+    `SELECT
+       COALESCE(NULLIF(r.view_name, ''), r.camera_id, '(unknown)') AS camera_key,
+       trim(d) AS defect,
+       COUNT(*)::int AS count
+     FROM eol_records r
+     JOIN eol_cables c ON c.id = r.cable_id,
+          LATERAL unnest(
+            CASE
+              WHEN jsonb_typeof(r.defects) = 'array' THEN ARRAY(SELECT jsonb_array_elements_text(r.defects))
+              ELSE ARRAY[]::text[]
+            END
+          ) AS d
+     ${whereSql} AND trim(d) <> ''
+     GROUP BY 1, 2
+     ORDER BY 1, count DESC`,
+    params
+  );
+
+  const map = config.eolCameraMap || {};
+  const resolveCamLabel = (key, cameraId) => {
+    if (key && map[key]) return map[key];
+    if (cameraId && map[cameraId]) return map[cameraId];
+    if (key && /^EOL\d+/i.test(key)) return key;
+    return key || cameraId || '(unknown)';
+  };
+
+  const packCam = (row) => {
+    const t = row.total || 0;
+    const p = row.pass_count || 0;
+    const f = row.fail_count || 0;
+    return {
+      view: resolveCamLabel(row.camera_key, row.camera_id),
+      cameraId: row.camera_id || '',
+      total: t,
+      passCount: p,
+      failCount: f,
+      passRate: t ? (p / t) * 100 : 0,
+      failRate: t ? (f / t) * 100 : 0,
+      uniqueSns: row.unique_sns || 0,
+      unit: 'camera',
+    };
+  };
+
+  const byCameraMap = new Map();
+  for (const row of camRes.rows) {
+    const packed = packCam(row);
+    const prev = byCameraMap.get(packed.view);
+    if (!prev) {
+      byCameraMap.set(packed.view, packed);
+      continue;
+    }
+    prev.total += packed.total;
+    prev.passCount += packed.passCount;
+    prev.failCount += packed.failCount;
+    prev.uniqueSns = Math.max(prev.uniqueSns, packed.uniqueSns);
+    prev.passRate = prev.total ? (prev.passCount / prev.total) * 100 : 0;
+    prev.failRate = prev.total ? (prev.failCount / prev.total) * 100 : 0;
+  }
+  const byCamera = [...byCameraMap.values()].sort((a, b) =>
+    String(a.view).localeCompare(String(b.view), undefined, { numeric: true })
+  );
+
+  const trendByCamera = {};
+  for (const row of camTrendRes.rows) {
+    const label = resolveCamLabel(row.camera_key, null);
+    if (!trendByCamera[label]) trendByCamera[label] = [];
+    trendByCamera[label].push({
+      bucket: row.bucket,
+      total: row.total,
+      passCount: row.pass_count,
+      failCount: row.fail_count,
+    });
+  }
+
+  const defectsByCamera = {};
+  for (const row of camDefectRes.rows) {
+    const label = resolveCamLabel(row.camera_key, null);
+    if (!defectsByCamera[label]) defectsByCamera[label] = [];
+    if (defectsByCamera[label].length >= 15) continue;
+    defectsByCamera[label].push({ defect: row.defect, count: row.count });
+  }
+
   const summary = summaryRes.rows[0];
   const total = summary.total || 0;
   const passCount = summary.pass_count || 0;
@@ -452,6 +567,9 @@ async function getEolDashboard(q = {}) {
       uniqueCarriers: summary.cycle_passes || 0,
       unit: 'cable',
     },
+    byCamera,
+    trendByCamera,
+    defectsByCamera,
     trend: trendRes.rows.map((r) => ({
       bucket: r.bucket,
       total: r.total,

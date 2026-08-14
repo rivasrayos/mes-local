@@ -286,6 +286,17 @@ select, input {
   border-left: 4px solid #c45c26;
 }
 
+.kpi-view-cam {
+  border-left: 4px solid #3d5a80;
+}
+
+.charts-grid .wide-span {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
 .tabs {
   display: flex;
   gap: 0.4rem;
@@ -729,4 +740,5 @@ th {
 @media (max-width: 900px) {
   .charts-grid { grid-template-columns: 1fr; }
   .chart-block.wide { grid-column: auto; }
+  .charts-grid .wide-span { grid-template-columns: 1fr; }
 }
