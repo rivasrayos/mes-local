@@ -1,20 +1,19 @@
 const { query, withTransaction } = require('./db');
-const { parseInspectionTime } = require('./time');
+const { parseInspectionTime, formatInTz } = require('./time');
 
 const DEFAULT_LEG_MAPPING = '1a2a3a4a1b2b3b4b';
 
 function parseIsoOrLocal(raw) {
   if (!raw) return { raw: '', local: null };
   const asString = String(raw);
+  // Already plant-local wall clock (IMLA style)
   const local = parseInspectionTime(asString);
   if (local) return { raw: asString, local };
 
+  // ISO with Z / offset → convert to plant TZ so dashboard windows match
   const d = new Date(asString);
   if (!Number.isNaN(d.getTime())) {
-    const pad = (n) => String(n).padStart(2, '0');
-    // Store as UTC wall-clock normalized to ISO local-like string for sorting
-    const normalized = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-    return { raw: asString, local: normalized };
+    return { raw: asString, local: formatInTz(d) };
   }
   return { raw: asString, local: null };
 }

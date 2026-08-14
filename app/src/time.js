@@ -19,11 +19,19 @@ function formatInTz(date = new Date(), timeZone = config.tz) {
 
 function parseInspectionTime(raw) {
   if (!raw || typeof raw !== 'string') return null;
-  // Accept YYYY-M-D H:mm:ss or zero-padded variants (IMLA + EOL)
-  const m = raw.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})$/);
-  if (!m) return null;
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${m[1]}-${pad(m[2])}-${pad(m[3])} ${pad(m[4])}:${m[5]}:${m[6]}`;
+  const trimmed = raw.trim();
+  // Accept YYYY-M-D H:mm:ss or zero-padded variants (IMLA + EOL local)
+  const m = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})$/);
+  if (m) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${m[1]}-${pad(m[2])}-${pad(m[3])} ${pad(m[4])}:${m[5]}:${m[6]}`;
+  }
+  // ISO timestamps (e.g. 2026-08-14T22:30:02.444312Z) → plant local wall clock
+  if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) {
+    const d = new Date(trimmed);
+    if (!Number.isNaN(d.getTime())) return formatInTz(d);
+  }
+  return null;
 }
 
 /**
