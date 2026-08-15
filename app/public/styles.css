@@ -700,6 +700,7 @@ th {
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 0.78rem;
   line-height: 1.45;
+  white-space: nowrap;
 }
 
 .cap-fail {

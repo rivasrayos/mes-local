@@ -613,32 +613,47 @@ async function loadEolInspections() {
     offset: state.eolOffset,
   };
   const data = await api(`/api/eol/inspections?${eolQs(extra)}`);
+  const camCols = (data.cameraViews && data.cameraViews.length)
+    ? data.cameraViews
+    : ['EOL1', 'EOL2', 'EOL3', 'EOL4', 'EOL5'];
+
+  const thead = document.querySelector('#eolInspTable thead tr');
+  if (thead) {
+    thead.innerHTML = `
+      <th>Time</th>
+      <th>Line</th>
+      <th>SN</th>
+      <th>Pos</th>
+      ${camCols.map((c) => `<th>${c}</th>`).join('')}
+      <th>Result</th>
+      <th>Defects</th>
+      <th></th>
+    `;
+  }
+
+  const renderCamCell = (caps = []) => {
+    if (!caps.length) return '—';
+    return caps.map((cap) => {
+      const id = cap.captureId || '—';
+      const fail = String(cap.passFail || '').toLowerCase() === 'fail';
+      const title = `pos ${cap.position ?? '—'} · ${cap.passFail || ''}`;
+      return `<span class="${fail ? 'cap-fail' : 'cap-ok'}" title="${title}">${id}</span>`;
+    }).join('<br>');
+  };
+
   const tbody = document.querySelector('#eolInspTable tbody');
   tbody.innerHTML = data.items.map((item) => {
     const sn = item.sn || item.SN || '';
     const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
-    const captureIds = Array.isArray(item.captureIds) ? item.captureIds.map(String) : [];
-    const failCaptureSet = new Set(
-      (Array.isArray(item.failCaptureIds) ? item.failCaptureIds : []).map(String)
-    );
-    const captureHtml = captureIds.length
-      ? captureIds.map((id) => (
-        failCaptureSet.has(id)
-          ? `<span class="cap-fail">${id}</span>`
-          : `<span class="cap-ok">${id}</span>`
-      )).join(', ')
-      : '—';
-    const failCams = Array.isArray(item.failCameras) && item.failCameras.length
-      ? item.failCameras.join(', ')
-      : '';
+    const byCam = item.capturesByCamera || {};
+    const camCells = camCols.map((cam) => `<td class="cap-cell">${renderCamCell(byCam[cam] || [])}</td>`).join('');
     return `
     <tr>
       <td>${item.inspectionTime || ''}</td>
       <td>${item.lineNumber || ''}</td>
       <td>${sn}</td>
       <td>${positions || '—'}</td>
-      <td class="cap-cell" title="${captureIds.join(', ')}">${captureHtml}</td>
-      <td title="${failCams || 'Sin fails de cámara'}">${failCams || '—'}</td>
+      ${camCells}
       <td><span class="badge ${(item.passFail || '').toLowerCase()}">${item.passFail || ''}</span></td>
       <td title="${item.defectType || ''}">${(item.defectType || '').slice(0, 40)}</td>
       <td><button class="btn" data-eol-id="${item.id}">Ver</button></td>

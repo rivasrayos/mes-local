@@ -69,6 +69,21 @@ function mapCable(row) {
       .filter(Boolean)
   )].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
 
+  const byCamRaw = Array.isArray(row.captures_by_camera) ? row.captures_by_camera : [];
+  const capturesByCamera = {};
+  for (const item of byCamRaw) {
+    const label = resolveViewLabel(item.view_name, item.camera_id, item.image_url) || '—';
+    if (!capturesByCamera[label]) capturesByCamera[label] = [];
+    capturesByCamera[label].push({
+      captureId: item.capture_id != null ? String(item.capture_id) : '',
+      passFail: item.pass_fail || '',
+      position: item.position,
+    });
+  }
+  for (const key of Object.keys(capturesByCamera)) {
+    capturesByCamera[key].sort((a, b) => Number(a.position || 0) - Number(b.position || 0));
+  }
+
   return {
     id: row.id,
     cycleId: row.cycle_id,
@@ -84,6 +99,10 @@ function mapCable(row) {
         .map((id) => String(id || '').trim())
         .filter(Boolean)
     )],
+    capturesByCamera,
+    cameraViews: Object.keys(capturesByCamera).sort((a, b) =>
+      String(a).localeCompare(String(b), undefined, { numeric: true })
+    ),
     passFail: row.pass_fail,
     defectType: row.defect_type || '',
     cameraCount: row.camera_count || 0,
@@ -376,7 +395,19 @@ async function listEol(q = {}) {
                 AND LOWER(r.pass_fail) = 'fail'
                 AND r.capture_id IS NOT NULL
                 AND r.capture_id <> ''
-            ), '[]'::jsonb) AS fail_capture_ids
+            ), '[]'::jsonb) AS fail_capture_ids,
+            COALESCE((
+              SELECT jsonb_agg(jsonb_build_object(
+                'view_name', COALESCE(NULLIF(r.view_name, ''), ''),
+                'camera_id', COALESCE(r.camera_id, ''),
+                'image_url', COALESCE(r.image_url, ''),
+                'capture_id', COALESCE(r.capture_id, ''),
+                'pass_fail', COALESCE(r.pass_fail, ''),
+                'position', r.position
+              ) ORDER BY r.position NULLS LAST, r.view_name, r.camera_id, r.capture_id)
+              FROM eol_records r
+              WHERE r.cable_id = c.id
+            ), '[]'::jsonb) AS captures_by_camera
      FROM eol_cables c
      JOIN eol_cycles cy ON cy.id = c.cycle_id
      ${whereSql}
@@ -385,11 +416,16 @@ async function listEol(q = {}) {
     [...params, limit, offset]
   );
 
+  const items = listRes.rows.map(mapCable);
+  const cameraViews = [...new Set(items.flatMap((it) => it.cameraViews || []))]
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+
   return {
     total: countRes.rows[0].total,
     limit,
     offset,
-    items: listRes.rows.map(mapCable),
+    cameraViews,
+    items,
   };
 }
 
