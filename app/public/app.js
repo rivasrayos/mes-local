@@ -704,8 +704,6 @@ async function openEolDetail(id) {
 
   $('drawerBody').innerHTML = `
     <dl class="kv">
-      <dt>cable id</dt><dd>${item.id}</dd>
-      <dt>cycleId</dt><dd>${item.cycleId || ''}</dd>
       <dt>lineNumber</dt><dd>${item.lineNumber || ''}</dd>
       <dt>stationName</dt><dd>${item.stationName || ''}</dd>
       <dt>SN (cable)</dt><dd>${sn}</dd>
