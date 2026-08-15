@@ -29,7 +29,8 @@ function parseCameraMap(raw) {
   return map;
 }
 
-// Default plant map (L11 EOL TIP): cameraId / host IP → EOL1..EOL5 by IP order
+// Default plant map: cameraId / host IP → EOL1..EOL5
+// L11 EOL TIP
 const DEFAULT_EOL_CAMERA_MAP = {
   'ov80i-gsac586514': 'EOL1',
   '192.168.11.174': 'EOL1',
@@ -41,6 +42,10 @@ const DEFAULT_EOL_CAMERA_MAP = {
   '192.168.11.177': 'EOL4',
   'ov80i-gsac586500': 'EOL5',
   '192.168.11.178': 'EOL5',
+  // L12 EOL TIP (serials seen without view label)
+  'ov80i-gsac586457': 'EOL1',
+  'ov80i-gsac586479': 'EOL4',
+  'ov80i-gsac586503': 'EOL5',
 };
 
 module.exports = {

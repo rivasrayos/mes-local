@@ -30,16 +30,55 @@ function isFail(value) {
 
 function resolveViewLabel(viewName, cameraId, imageUrl) {
   const map = config.eolCameraMap || {};
+  const id = String(cameraId || '').trim();
+  if (id && map[id]) return map[id];
+
+  const host = hostFromUrl(imageUrl);
+  if (host && map[host]) return map[host];
+
   if (viewName && String(viewName).trim()) {
     const v = String(viewName).trim();
     if (map[v]) return map[v];
     if (/^EOL\d+/i.test(v)) return v;
-    return v;
   }
-  if (cameraId && map[cameraId]) return map[cameraId];
-  const host = hostFromUrl(imageUrl);
-  if (host && map[host]) return map[host];
-  return cameraId || '';
+  return id || '';
+}
+
+/** Prefer map / EOL* labels; never leave bare camera serials when a free EOLn exists */
+function buildCameraLabelResolver(cameraRows = []) {
+  const map = config.eolCameraMap || {};
+  const known = new Map();
+  const ids = [];
+
+  for (const row of cameraRows) {
+    const id = String(row.camera_id || '').trim();
+    if (id && !ids.includes(id)) ids.push(id);
+    const host = hostFromUrl(row.sample_image || row.image_url || '');
+    let label = (id && map[id])
+      || (host && map[host])
+      || (row.eol_view && /^EOL\d+/i.test(String(row.eol_view).trim()) ? String(row.eol_view).trim() : '')
+      || (row.camera_key && /^EOL\d+/i.test(String(row.camera_key).trim()) ? String(row.camera_key).trim() : '');
+    if (id && label && /^EOL\d+/i.test(label)) known.set(id, label);
+  }
+
+  const used = new Set([...known.values()].map((v) => v.toUpperCase()));
+  const free = [];
+  for (let n = 1; n <= Math.max(5, ids.length + 2); n += 1) {
+    const lab = `EOL${n}`;
+    if (!used.has(lab)) free.push(lab);
+  }
+  const unmapped = ids.filter((id) => !known.has(id)).sort((a, b) => a.localeCompare(b));
+  unmapped.forEach((id, i) => {
+    known.set(id, free[i] || `EOL${i + 1}`);
+  });
+
+  return (cameraId, fallbackKey) => {
+    const id = String(cameraId || '').trim();
+    if (id && known.has(id)) return known.get(id);
+    if (id && map[id]) return map[id];
+    if (fallbackKey && /^EOL\d+/i.test(String(fallbackKey))) return String(fallbackKey);
+    return fallbackKey || id || '(unknown)';
+  };
 }
 
 function mapCable(row) {
@@ -113,7 +152,7 @@ function mapRecord(row) {
     stationName: row.station_name || '',
     position: row.position,
     cameraId: row.camera_id,
-    view: row.view_name || config.eolCameraMap[row.camera_id] || config.eolCameraMap[hostFromUrl(row.image_url)] || '',
+    view: resolveViewLabel(row.view_name, row.camera_id, row.image_url),
     passFail: row.pass_fail,
     defects: row.defects || [],
     defectType: Array.isArray(row.defects) ? row.defects.join(', ') : (row.defect_type || ''),
@@ -509,8 +548,9 @@ async function getEolDashboard(q = {}) {
   // Per-camera yield (EOL1…EOL5) from camera records in the same filter window
   const camRes = await query(
     `SELECT
-       COALESCE(NULLIF(r.view_name, ''), r.camera_id, '(unknown)') AS camera_key,
        r.camera_id,
+       MAX(NULLIF(r.view_name, '')) FILTER (WHERE r.view_name ~* '^EOL[0-9]+') AS eol_view,
+       (array_agg(r.image_url) FILTER (WHERE COALESCE(r.image_url, '') <> ''))[1] AS sample_image,
        COUNT(*)::int AS total,
        COUNT(*) FILTER (WHERE LOWER(r.pass_fail) = 'pass')::int AS pass_count,
        COUNT(*) FILTER (WHERE LOWER(r.pass_fail) = 'fail')::int AS fail_count,
@@ -518,14 +558,14 @@ async function getEolDashboard(q = {}) {
      FROM eol_records r
      JOIN eol_cables c ON c.id = r.cable_id
      ${whereSql}
-     GROUP BY 1, 2
+     GROUP BY r.camera_id
      ORDER BY 1`,
     params
   );
 
   const camTrendRes = await query(
     `SELECT
-       COALESCE(NULLIF(r.view_name, ''), r.camera_id, '(unknown)') AS camera_key,
+       r.camera_id,
        date_trunc('hour', COALESCE(r.inspection_time, r.created_at::timestamp)) AS bucket,
        COUNT(*)::int AS total,
        COUNT(*) FILTER (WHERE LOWER(r.pass_fail) = 'pass')::int AS pass_count,
@@ -533,14 +573,14 @@ async function getEolDashboard(q = {}) {
      FROM eol_records r
      JOIN eol_cables c ON c.id = r.cable_id
      ${whereSql}
-     GROUP BY 1, 2
+     GROUP BY r.camera_id, 2
      ORDER BY 1, 2`,
     params
   );
 
   const camDefectRes = await query(
     `SELECT
-       COALESCE(NULLIF(r.view_name, ''), r.camera_id, '(unknown)') AS camera_key,
+       r.camera_id,
        trim(d) AS defect,
        COUNT(*)::int AS count
      FROM eol_records r
@@ -552,25 +592,19 @@ async function getEolDashboard(q = {}) {
             END
           ) AS d
      ${whereSql} AND trim(d) <> ''
-     GROUP BY 1, 2
+     GROUP BY r.camera_id, 2
      ORDER BY 1, count DESC`,
     params
   );
 
-  const map = config.eolCameraMap || {};
-  const resolveCamLabel = (key, cameraId) => {
-    if (key && map[key]) return map[key];
-    if (cameraId && map[cameraId]) return map[cameraId];
-    if (key && /^EOL\d+/i.test(key)) return key;
-    return key || cameraId || '(unknown)';
-  };
+  const resolveCamLabel = buildCameraLabelResolver(camRes.rows);
 
   const packCam = (row) => {
     const t = row.total || 0;
     const p = row.pass_count || 0;
     const f = row.fail_count || 0;
     return {
-      view: resolveCamLabel(row.camera_key, row.camera_id),
+      view: resolveCamLabel(row.camera_id, row.eol_view),
       cameraId: row.camera_id || '',
       total: t,
       passCount: p,
@@ -603,7 +637,7 @@ async function getEolDashboard(q = {}) {
 
   const trendByCamera = {};
   for (const row of camTrendRes.rows) {
-    const label = resolveCamLabel(row.camera_key, null);
+    const label = resolveCamLabel(row.camera_id, null);
     if (!trendByCamera[label]) trendByCamera[label] = [];
     trendByCamera[label].push({
       bucket: row.bucket,
@@ -615,7 +649,7 @@ async function getEolDashboard(q = {}) {
 
   const defectsByCamera = {};
   for (const row of camDefectRes.rows) {
-    const label = resolveCamLabel(row.camera_key, null);
+    const label = resolveCamLabel(row.camera_id, null);
     if (!defectsByCamera[label]) defectsByCamera[label] = [];
     if (defectsByCamera[label].length >= 15) continue;
     defectsByCamera[label].push({ defect: row.defect, count: row.count });

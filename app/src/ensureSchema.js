@@ -117,7 +117,7 @@ async function ensureSchema() {
     WHERE inspection_time_raw ~* 'T.*Z$'
   `).catch(() => {});
 
-  // Backfill empty view labels from known cameraId → EOL1..EOL5 map
+  // Backfill view labels from known cameraId → EOL1..EOL5 map
   const { eolCameraMap } = require('./config');
   for (const [key, label] of Object.entries(eolCameraMap || {})) {
     if (!key || !label || !key.startsWith('ov80i')) continue;
@@ -125,7 +125,12 @@ async function ensureSchema() {
       `UPDATE eol_records
        SET view_name = $1
        WHERE camera_id = $2
-         AND (view_name IS NULL OR view_name = '')`,
+         AND (
+           view_name IS NULL
+           OR view_name = ''
+           OR view_name = camera_id
+           OR view_name ~* '^ov80i-'
+         )`,
       [label, key]
     ).catch(() => {});
   }
