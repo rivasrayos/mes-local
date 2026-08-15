@@ -100,6 +100,27 @@ function fmtPct(n) {
   return `${(n || 0).toFixed(1)}%`;
 }
 
+/** Split timestamps into { date: YYYY-MM-DD, time: HH:mm:ss } for tables */
+function splitDateTime(raw) {
+  if (raw == null || raw === '') return { date: '—', time: '—' };
+  const asString = String(raw).trim();
+
+  // Already local wall clock: 2026-08-14 15:30:02 (optional fractional)
+  let m = asString.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
+  if (m) return { date: m[1], time: m[2] };
+
+  // ISO with Z/offset → plant-looking local via Date (browser TZ; MES servers are LA)
+  const d = new Date(asString);
+  if (!Number.isNaN(d.getTime())) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return {
+      date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      time: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
+    };
+  }
+  return { date: asString.slice(0, 10) || '—', time: '—' };
+}
+
 function makeChart(id, config) {
   const ctx = $(id);
   if (!ctx) return;
@@ -617,9 +638,12 @@ async function loadImlaInspections() {
   };
   const data = await api(`/api/inspections?${imlaQs(extra)}`);
   const tbody = document.querySelector('#inspTable tbody');
-  tbody.innerHTML = data.items.map((item) => `
+  tbody.innerHTML = data.items.map((item) => {
+    const { date, time } = splitDateTime(item.inspectionTime);
+    return `
     <tr>
-      <td>${item.inspectionTime || ''}</td>
+      <td>${date}</td>
+      <td>${time}</td>
       <td>${item.lineNumber || ''}</td>
       <td>${item.SN || ''}</td>
       <td>${item.carrierSn || ''}</td>
@@ -628,8 +652,8 @@ async function loadImlaInspections() {
       <td title="${item.defectType || ''}">${(item.defectType || '').slice(0, 40)}</td>
       <td>${item.WeldingPosition || ''}</td>
       <td><button class="btn" data-id="${item.id}">Ver</button></td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
   tbody.querySelectorAll('button[data-id]').forEach((btn) => {
     btn.addEventListener('click', () => openImlaDetail(btn.dataset.id));
   });
@@ -862,7 +886,8 @@ async function loadEolInspections() {
   const thead = document.querySelector('#eolInspTable thead tr');
   if (thead) {
     thead.innerHTML = `
-      <th>Time</th>
+      <th>Fecha</th>
+      <th>Hora</th>
       <th>Line</th>
       <th>SN</th>
       <th>Pos</th>
@@ -893,9 +918,11 @@ async function loadEolInspections() {
     const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
     const byCam = item.capturesByCamera || {};
     const camCells = camCols.map((cam) => `<td class="cap-cell">${renderCamCell(byCam[cam] || [])}</td>`).join('');
+    const { date, time } = splitDateTime(item.inspectionTime);
     return `
     <tr>
-      <td>${item.inspectionTime || ''}</td>
+      <td>${date}</td>
+      <td>${time}</td>
       <td>${item.lineNumber || ''}</td>
       <td>${sn}</td>
       <td>${positions || '—'}</td>

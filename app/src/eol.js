@@ -109,9 +109,9 @@ function mapCable(row) {
     defectType: row.defect_type || '',
     cameraCount: row.camera_count || 0,
     failCameraCount: row.fail_camera_count || failCameras.length || 0,
-    inspectionTime: row.inspection_time_raw || (row.inspection_time
+    inspectionTime: row.inspection_time
       ? String(row.inspection_time).replace('T', ' ').slice(0, 19)
-      : null),
+      : (row.inspection_time_raw || null),
     cycleTimestamp: row.cycle_timestamp,
     createdAt: row.created_at,
     unit: 'cable',
