@@ -78,6 +78,8 @@ function mapCable(row) {
       captureId: item.capture_id != null ? String(item.capture_id) : '',
       passFail: item.pass_fail || '',
       position: item.position,
+      imageUrl: item.image_url || '',
+      markedImageUrl: item.marked_image_url || '',
     });
   }
   for (const key of Object.keys(capturesByCamera)) {
@@ -401,6 +403,7 @@ async function listEol(q = {}) {
                 'view_name', COALESCE(NULLIF(r.view_name, ''), ''),
                 'camera_id', COALESCE(r.camera_id, ''),
                 'image_url', COALESCE(r.image_url, ''),
+                'marked_image_url', COALESCE(r.marked_image_url, ''),
                 'capture_id', COALESCE(r.capture_id, ''),
                 'pass_fail', COALESCE(r.pass_fail, ''),
                 'position', r.position

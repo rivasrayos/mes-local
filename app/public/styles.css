@@ -729,6 +729,22 @@ th {
   white-space: nowrap;
 }
 
+.cap-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.cap-link:hover {
+  color: var(--accent, #0f6e7c);
+}
+
 .cap-fail {
   color: #b42318;
   font-weight: 700;
@@ -736,6 +752,60 @@ th {
 
 .cap-ok {
   color: inherit;
+}
+
+.cap-choice-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 160px;
+  background: #101820;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  padding: 0.35rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.cap-choice-menu.hidden {
+  display: none;
+}
+
+.cap-choice-menu button {
+  border: 0;
+  background: transparent;
+  color: #e8eef3;
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cap-choice-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.media-lightbox-panel iframe.media-frame,
+.media-lightbox-panel img.media-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% + 28px);
+  height: calc(100% + 28px);
+  border: 0;
+  background: #0b1116;
+  transform: translate(-50%, -50%) scale(1);
+  transform-origin: center center;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.media-lightbox-panel img.media-frame-image {
+  width: auto;
+  height: auto;
+  max-width: none;
+  object-fit: contain;
 }
 
 .eol-cam-table {

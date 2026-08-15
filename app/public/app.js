@@ -177,13 +177,16 @@ function renderImages(urls = []) {
 
 const mediaZoom = { value: 1, min: 0.5, max: 4, step: 0.15 };
 const mediaPan = { x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 };
-const mediaEmbed = { reloadTimer: null, pendingReload: false, openUrl: '' };
+const mediaEmbed = { reloadTimer: null, pendingReload: false, openUrl: '', mode: 'embed' };
+const capChoice = { el: null, payload: null };
 
 function applyMediaTransform() {
   const frame = $('mediaLightboxFrame');
+  const image = $('mediaLightboxImage');
   const btn = $('mediaZoomReset');
-  if (!frame) return;
-  frame.style.transform = `translate(calc(-50% + ${mediaPan.x}px), calc(-50% + ${mediaPan.y}px)) scale(${mediaZoom.value})`;
+  const transform = `translate(calc(-50% + ${mediaPan.x}px), calc(-50% + ${mediaPan.y}px)) scale(${mediaZoom.value})`;
+  if (frame) frame.style.transform = transform;
+  if (image) image.style.transform = transform;
   if (btn) btn.textContent = `${Math.round(mediaZoom.value * 100)}%`;
 }
 
@@ -200,37 +203,73 @@ function bustEmbedUrl(url) {
   return `${clean}${sep}_mes_reload=${Date.now()}`;
 }
 
-function openMediaLightbox(url) {
+function stripEmbedOverlays(url) {
+  try {
+    const u = new URL(url);
+    ['labels', 'heatmap', 'boundings'].forEach((k) => u.searchParams.delete(k));
+    return u.toString();
+  } catch {
+    return String(url || '')
+      .replace(/([?&])labels=[^&]*/gi, '$1')
+      .replace(/([?&])heatmap=[^&]*/gi, '$1')
+      .replace(/([?&])boundings=[^&]*/gi, '$1')
+      .replace(/[?&]$/, '');
+  }
+}
+
+function setMediaMode(mode) {
+  mediaEmbed.mode = mode;
+  const frame = $('mediaLightboxFrame');
+  const image = $('mediaLightboxImage');
+  if (!frame || !image) return;
+  if (mode === 'image') {
+    frame.classList.add('hidden');
+    frame.src = 'about:blank';
+    image.classList.remove('hidden');
+  } else {
+    image.classList.add('hidden');
+    image.removeAttribute('src');
+    frame.classList.remove('hidden');
+  }
+}
+
+function openMediaLightbox(url, { mode = 'embed', title = 'Captura' } = {}) {
   mediaEmbed.openUrl = url;
-  $('mediaLightboxTitle').textContent = 'Vista con boundings';
+  $('mediaLightboxTitle').textContent = title;
   $('mediaLightboxOpen').href = url;
 
   const frame = $('mediaLightboxFrame');
+  const image = $('mediaLightboxImage');
   if (mediaEmbed.reloadTimer) {
     clearTimeout(mediaEmbed.reloadTimer);
     mediaEmbed.reloadTimer = null;
   }
-  mediaEmbed.pendingReload = true;
+  mediaEmbed.pendingReload = mode === 'embed';
   resetMediaView(1);
+  setMediaMode(mode === 'image' ? 'image' : 'embed');
 
-  const onLoad = () => {
-    // Overview embed often lays out wrong on first paint; one forced reload (like F5) fixes it.
-    if (!mediaEmbed.pendingReload) return;
-    mediaEmbed.pendingReload = false;
-    mediaEmbed.reloadTimer = setTimeout(() => {
-      mediaEmbed.reloadTimer = null;
-      if ($('mediaLightbox').classList.contains('hidden')) return;
-      if (frame.src === 'about:blank') return;
-      frame.src = bustEmbedUrl(url);
-      applyMediaTransform();
-    }, 350);
-  };
+  if (mode === 'image') {
+    image.src = url;
+    applyMediaTransform();
+  } else {
+    const onLoad = () => {
+      if (!mediaEmbed.pendingReload) return;
+      mediaEmbed.pendingReload = false;
+      mediaEmbed.reloadTimer = setTimeout(() => {
+        mediaEmbed.reloadTimer = null;
+        if ($('mediaLightbox').classList.contains('hidden')) return;
+        if (frame.src === 'about:blank') return;
+        frame.src = bustEmbedUrl(url);
+        applyMediaTransform();
+      }, 350);
+    };
+    frame.removeEventListener('load', frame._eolEmbedOnLoad);
+    frame._eolEmbedOnLoad = onLoad;
+    frame.addEventListener('load', onLoad);
+    frame.src = bustEmbedUrl(url);
+    applyMediaTransform();
+  }
 
-  frame.removeEventListener('load', frame._eolEmbedOnLoad);
-  frame._eolEmbedOnLoad = onLoad;
-  frame.addEventListener('load', onLoad);
-  frame.src = bustEmbedUrl(url);
-  applyMediaTransform();
   document.body.style.overflow = 'hidden';
   $('mediaLightbox').classList.remove('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'false');
@@ -249,18 +288,35 @@ function closeMediaLightbox() {
   $('mediaLightbox').classList.add('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'true');
   const frame = $('mediaLightboxFrame');
+  const image = $('mediaLightboxImage');
   if (frame?._eolEmbedOnLoad) {
     frame.removeEventListener('load', frame._eolEmbedOnLoad);
     frame._eolEmbedOnLoad = null;
   }
-  frame.src = 'about:blank';
-  frame.style.transform = '';
+  if (frame) {
+    frame.src = 'about:blank';
+    frame.style.transform = '';
+    frame.classList.remove('hidden');
+  }
+  if (image) {
+    image.removeAttribute('src');
+    image.style.transform = '';
+    image.classList.add('hidden');
+  }
 }
 
 function reloadMediaEmbed() {
-  const frame = $('mediaLightboxFrame');
   const url = mediaEmbed.openUrl;
-  if (!frame || !url) return;
+  if (!url) return;
+  if (mediaEmbed.mode === 'image') {
+    const image = $('mediaLightboxImage');
+    if (!image) return;
+    image.src = `${url}${url.includes('?') ? '&' : '?'}_mes_reload=${Date.now()}`;
+    applyMediaTransform();
+    return;
+  }
+  const frame = $('mediaLightboxFrame');
+  if (!frame) return;
   if (mediaEmbed.reloadTimer) {
     clearTimeout(mediaEmbed.reloadTimer);
     mediaEmbed.reloadTimer = null;
@@ -269,6 +325,49 @@ function reloadMediaEmbed() {
   resetMediaView(mediaZoom.value);
   frame.src = bustEmbedUrl(url);
   applyMediaTransform();
+}
+
+function hideCapChoiceMenu() {
+  const menu = $('capChoiceMenu');
+  if (!menu) return;
+  menu.classList.add('hidden');
+  menu.setAttribute('aria-hidden', 'true');
+  capChoice.payload = null;
+}
+
+function showCapChoiceMenu(anchorEl, payload) {
+  const menu = $('capChoiceMenu');
+  if (!menu) return;
+  capChoice.payload = payload;
+  const rect = anchorEl.getBoundingClientRect();
+  menu.classList.remove('hidden');
+  menu.setAttribute('aria-hidden', 'false');
+  const menuRect = menu.getBoundingClientRect();
+  let left = rect.left;
+  let top = rect.bottom + 6;
+  if (left + menuRect.width > window.innerWidth - 8) left = window.innerWidth - menuRect.width - 8;
+  if (top + menuRect.height > window.innerHeight - 8) top = rect.top - menuRect.height - 6;
+  menu.style.left = `${Math.max(8, left)}px`;
+  menu.style.top = `${Math.max(8, top)}px`;
+}
+
+function openCaptureFromChoice(mode) {
+  const payload = capChoice.payload;
+  hideCapChoiceMenu();
+  if (!payload) return;
+  if (mode === 'image') {
+    const url = payload.imageUrl
+      || (payload.markedImageUrl ? stripEmbedOverlays(payload.markedImageUrl) : '');
+    if (!url) return;
+    openMediaLightbox(url, { mode: 'image', title: `Imagen · ${payload.captureId || ''}` });
+    return;
+  }
+  const url = payload.markedImageUrl || payload.imageUrl;
+  if (!url) return;
+  openMediaLightbox(url, {
+    mode: isEmbedUrl(url) ? 'embed' : 'image',
+    title: `Boundings · ${payload.captureId || ''}`,
+  });
 }
 
 function wireMediaStageInteractions() {
@@ -718,6 +817,7 @@ async function loadEolDashboard() {
 
 async function loadEolInspections() {
   updateEolChrome(getRoute());
+  hideCapChoiceMenu();
   const extra = {
     sn: $('eolFSn').value.trim(),
     captureId: $('eolFCaptureId').value.trim(),
@@ -741,7 +841,6 @@ async function loadEolInspections() {
       ${camCols.map((c) => `<th>${c}</th>`).join('')}
       <th>Result</th>
       <th>Defects</th>
-      <th></th>
     `;
   }
 
@@ -750,8 +849,13 @@ async function loadEolInspections() {
     return caps.map((cap) => {
       const id = cap.captureId || '—';
       const fail = String(cap.passFail || '').toLowerCase() === 'fail';
-      const title = `pos ${cap.position ?? '—'} · ${cap.passFail || ''}`;
-      return `<span class="${fail ? 'cap-fail' : 'cap-ok'}" title="${title}">${id}</span>`;
+      const title = `pos ${cap.position ?? '—'} · ${cap.passFail || ''} · clic para abrir`;
+      const payload = encodeURIComponent(JSON.stringify({
+        captureId: cap.captureId || '',
+        imageUrl: cap.imageUrl || '',
+        markedImageUrl: cap.markedImageUrl || '',
+      }));
+      return `<button type="button" class="cap-link ${fail ? 'cap-fail' : 'cap-ok'}" title="${title}" data-cap-payload="${payload}">${id}</button>`;
     }).join('<br>');
   };
 
@@ -770,12 +874,20 @@ async function loadEolInspections() {
       ${camCells}
       <td><span class="badge ${(item.passFail || '').toLowerCase()}">${item.passFail || ''}</span></td>
       <td title="${item.defectType || ''}">${(item.defectType || '').slice(0, 40)}</td>
-      <td><button class="btn" data-eol-id="${item.id}">Ver</button></td>
     </tr>`;
   }).join('');
-  tbody.querySelectorAll('button[data-eol-id]').forEach((btn) => {
-    btn.addEventListener('click', () => openEolDetail(btn.dataset.eolId));
+
+  tbody.querySelectorAll('button[data-cap-payload]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        const payload = JSON.parse(decodeURIComponent(btn.dataset.capPayload));
+        showCapChoiceMenu(btn, payload);
+      } catch (_) { /* ignore bad payload */ }
+    });
   });
+
   $('eolPageInfo').textContent = `${data.offset + 1}–${Math.min(data.offset + data.limit, data.total)} de ${data.total}`;
   $('eolPrevPage').disabled = data.offset <= 0;
   $('eolNextPage').disabled = data.offset + data.limit >= data.total;
@@ -990,6 +1102,18 @@ function wireUi() {
   $('mediaReloadEmbed').addEventListener('click', reloadMediaEmbed);
   $('mediaLightbox').addEventListener('click', (e) => {
     if (e.target.id === 'mediaLightbox') closeMediaLightbox();
+  });
+  $('capChoiceMenu')?.querySelectorAll('[data-cap-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => openCaptureFromChoice(btn.dataset.capMode));
+  });
+  document.addEventListener('click', (e) => {
+    const menu = $('capChoiceMenu');
+    if (!menu || menu.classList.contains('hidden')) return;
+    if (menu.contains(e.target) || e.target.closest?.('[data-cap-payload]')) return;
+    hideCapChoiceMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideCapChoiceMenu();
   });
   $('mediaZoomIn').addEventListener('click', () => {
     mediaZoom.value = Math.min(mediaZoom.max, mediaZoom.value + mediaZoom.step);

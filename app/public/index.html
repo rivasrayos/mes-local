@@ -307,7 +307,6 @@
               <th>EOL5</th>
               <th>Result</th>
               <th>Defects</th>
-              <th></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -371,9 +370,15 @@
         </div>
       </header>
       <div class="embed-stage" id="mediaEmbedStage">
-        <iframe id="mediaLightboxFrame" title="capture viewer" referrerpolicy="no-referrer" scrolling="no"></iframe>
+        <iframe id="mediaLightboxFrame" class="media-frame" title="capture viewer" referrerpolicy="no-referrer" scrolling="no"></iframe>
+        <img id="mediaLightboxImage" class="media-frame media-frame-image hidden" alt="capture" referrerpolicy="no-referrer" />
       </div>
     </div>
   </aside>
+
+  <div id="capChoiceMenu" class="cap-choice-menu hidden" role="menu" aria-hidden="true">
+    <button type="button" data-cap-mode="image">Solo imagen</button>
+    <button type="button" data-cap-mode="boundings">Con boundings</button>
+  </div>
 </body>
 </html>
