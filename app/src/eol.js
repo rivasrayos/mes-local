@@ -79,6 +79,11 @@ function mapCable(row) {
     positions: row.positions || [],
     captureIds: row.capture_ids || [],
     failCameras,
+    failCaptureIds: [...new Set(
+      (Array.isArray(row.fail_capture_ids) ? row.fail_capture_ids : [])
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)
+    )],
     passFail: row.pass_fail,
     defectType: row.defect_type || '',
     cameraCount: row.camera_count || 0,
@@ -363,7 +368,15 @@ async function listEol(q = {}) {
               FROM eol_records r
               WHERE r.cable_id = c.id
                 AND LOWER(r.pass_fail) = 'fail'
-            ), '[]'::jsonb) AS fail_cameras
+            ), '[]'::jsonb) AS fail_cameras,
+            COALESCE((
+              SELECT jsonb_agg(DISTINCT r.capture_id)
+              FROM eol_records r
+              WHERE r.cable_id = c.id
+                AND LOWER(r.pass_fail) = 'fail'
+                AND r.capture_id IS NOT NULL
+                AND r.capture_id <> ''
+            ), '[]'::jsonb) AS fail_capture_ids
      FROM eol_cables c
      JOIN eol_cycles cy ON cy.id = c.cycle_id
      ${whereSql}

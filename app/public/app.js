@@ -617,7 +617,17 @@ async function loadEolInspections() {
   tbody.innerHTML = data.items.map((item) => {
     const sn = item.sn || item.SN || '';
     const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
-    const captureIds = Array.isArray(item.captureIds) ? item.captureIds.join(', ') : '';
+    const captureIds = Array.isArray(item.captureIds) ? item.captureIds.map(String) : [];
+    const failCaptureSet = new Set(
+      (Array.isArray(item.failCaptureIds) ? item.failCaptureIds : []).map(String)
+    );
+    const captureHtml = captureIds.length
+      ? captureIds.map((id) => (
+        failCaptureSet.has(id)
+          ? `<span class="cap-fail">${id}</span>`
+          : `<span class="cap-ok">${id}</span>`
+      )).join(', ')
+      : '—';
     const failCams = Array.isArray(item.failCameras) && item.failCameras.length
       ? item.failCameras.join(', ')
       : '';
@@ -627,7 +637,7 @@ async function loadEolInspections() {
       <td>${item.lineNumber || ''}</td>
       <td>${sn}</td>
       <td>${positions || '—'}</td>
-      <td title="${captureIds}">${captureIds || '—'}</td>
+      <td class="cap-cell" title="${captureIds.join(', ')}">${captureHtml}</td>
       <td title="${failCams || 'Sin fails de cámara'}">${failCams || '—'}</td>
       <td><span class="badge ${(item.passFail || '').toLowerCase()}">${item.passFail || ''}</span></td>
       <td title="${item.defectType || ''}">${(item.defectType || '').slice(0, 40)}</td>
