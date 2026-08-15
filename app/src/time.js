@@ -17,6 +17,40 @@ function formatInTz(date = new Date(), timeZone = config.tz) {
   return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
+/**
+ * Normalize DB/Date/ISO values to plant wall-clock "YYYY-MM-DD HH:mm:ss".
+ * Never use String(date).slice(...) — it truncates to the hour ("Fri Aug 14 2026 17").
+ */
+function formatWallClock(value) {
+  if (value == null || value === '') return null;
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    // timestamp without time zone from node-pg: wall clock lives in UTC fields
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())} ${pad(value.getUTCHours())}:${pad(value.getUTCMinutes())}:${pad(value.getUTCSeconds())}`;
+  }
+
+  const s = String(value).trim();
+
+  // Plant-local wall clock (space-separated)
+  const local = s.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/);
+  if (local) return `${local[1]} ${local[2]}`;
+
+  // ISO with Z / offset → convert to plant TZ
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s) && (/Z$/i.test(s) || /[+-]\d{2}:?\d{2}$/.test(s))) {
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return formatInTz(d);
+  }
+
+  // ISO-like without offset: treat as wall clock
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})/);
+  if (iso) return `${iso[1]} ${iso[2]}`;
+
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) return formatInTz(d);
+  return null;
+}
+
 function parseInspectionTime(raw) {
   if (!raw || typeof raw !== 'string') return null;
   const trimmed = raw.trim();
@@ -104,6 +138,7 @@ function resolveTimeWindow(query = {}) {
 
 module.exports = {
   formatInTz,
+  formatWallClock,
   parseInspectionTime,
   getShiftBounds,
   resolveTimeWindow,

@@ -1,5 +1,5 @@
 const { query, withTransaction } = require('./db');
-const { parseInspectionTime } = require('./time');
+const { formatWallClock, formatInTz } = require('./time');
 const {
   DEFAULT_LEG_MAPPING,
   buildCablesFromSlots,
@@ -47,9 +47,8 @@ function mapRow(row) {
     stageName: row.stage_name,
     workStationCode: row.work_station_code,
     SN: row.sn,
-    inspectionTime: row.inspection_time_raw || (row.inspection_time
-      ? String(row.inspection_time).replace('T', ' ').slice(0, 19)
-      : null),
+    inspectionTime: formatWallClock(row.inspection_time)
+      || formatWallClock(row.inspection_time_raw),
     passFail: row.pass_fail,
     defectType: row.defect_type,
     imageUrls: row.image_urls || [],
@@ -108,11 +107,13 @@ async function ingestBatch(payload) {
     );
     const batch = batchRes.rows[0];
     const inserted = [];
+    // Fecha/hora = llegada del mensaje al MES (no la del payload de la máquina)
+    const receivedAt = formatInTz(new Date());
 
     for (const item of data) {
       const params = extractParams(item.parameters);
       const inspectionTimeRaw = item.inspectionTime != null ? String(item.inspectionTime) : '';
-      const inspectionTime = parseInspectionTime(inspectionTimeRaw);
+      const inspectionTime = receivedAt;
 
       const legMapping = item.leg_mapping || item.legMapping || DEFAULT_LEG_MAPPING;
 

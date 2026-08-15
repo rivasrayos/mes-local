@@ -109,7 +109,11 @@ function splitDateTime(raw) {
   let m = asString.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
   if (m) return { date: m[1], time: m[2] };
 
-  // ISO with Z/offset → plant-looking local via Date (browser TZ; MES servers are LA)
+  // Only parse real ISO / numeric dates — not broken "Fri Aug 14 2026 17" truncations
+  if (!/^\d{4}-\d{2}-\d{2}/.test(asString) && !/^\d{10,13}$/.test(asString)) {
+    return { date: '—', time: '—' };
+  }
+
   const d = new Date(asString);
   if (!Number.isNaN(d.getTime())) {
     const pad = (n) => String(n).padStart(2, '0');

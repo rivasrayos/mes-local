@@ -1,23 +1,8 @@
 const { query, withTransaction } = require('./db');
-const { parseInspectionTime, formatInTz } = require('./time');
+const { formatInTz, formatWallClock } = require('./time');
 const config = require('./config');
 
 const DEFAULT_LEG_MAPPING = '1a2a3a4a1b2b3b4b';
-
-function parseIsoOrLocal(raw) {
-  if (!raw) return { raw: '', local: null };
-  const asString = String(raw);
-  // Already plant-local wall clock (IMLA style)
-  const local = parseInspectionTime(asString);
-  if (local) return { raw: asString, local };
-
-  // ISO with Z / offset → convert to plant TZ so dashboard windows match
-  const d = new Date(asString);
-  if (!Number.isNaN(d.getTime())) {
-    return { raw: asString, local: formatInTz(d) };
-  }
-  return { raw: asString, local: null };
-}
 
 function hostFromUrl(url) {
   const m = String(url || '').match(/^https?:\/\/([^/:]+)/i);
@@ -109,9 +94,8 @@ function mapCable(row) {
     defectType: row.defect_type || '',
     cameraCount: row.camera_count || 0,
     failCameraCount: row.fail_camera_count || failCameras.length || 0,
-    inspectionTime: row.inspection_time
-      ? String(row.inspection_time).replace('T', ' ').slice(0, 19)
-      : (row.inspection_time_raw || null),
+    inspectionTime: formatWallClock(row.inspection_time)
+      || formatWallClock(row.inspection_time_raw),
     cycleTimestamp: row.cycle_timestamp,
     createdAt: row.created_at,
     unit: 'cable',
@@ -134,9 +118,8 @@ function mapRecord(row) {
     defects: row.defects || [],
     defectType: Array.isArray(row.defects) ? row.defects.join(', ') : (row.defect_type || ''),
     captureId: row.capture_id || '',
-    inspectionTime: row.inspection_time_raw || (row.inspection_time
-      ? String(row.inspection_time).replace('T', ' ').slice(0, 19)
-      : null),
+    inspectionTime: formatWallClock(row.inspection_time)
+      || formatWallClock(row.inspection_time_raw),
     imageUrl: row.image_url || '',
     markedImageUrl: row.marked_image_url || '',
     imageUrls: [row.image_url, row.marked_image_url].filter(Boolean),
@@ -201,6 +184,8 @@ async function insertCycleWithRecords(client, {
     ]
   );
   const cycle = cycleRes.rows[0];
+  // Fecha/hora = llegada del ciclo al MES (no la del payload)
+  const receivedAt = formatInTz(new Date());
 
   // Group by SN => one physical cable (same SN on a/b ends)
   const bySn = new Map();
@@ -217,9 +202,7 @@ async function insertCycleWithRecords(client, {
     const anyFail = recs.some((r) => isFail(r.passFail));
     const defects = [...new Set(recs.flatMap((r) => (Array.isArray(r.defects) ? r.defects : [])))];
     const failCameraCount = recs.filter((r) => isFail(r.passFail)).length;
-    const times = recs.map((r) => parseIsoOrLocal(r.inspectionTime)).filter((t) => t.local);
-    times.sort((a, b) => String(a.local).localeCompare(String(b.local)));
-    const first = times[0] || { raw: '', local: null };
+    const firstRaw = recs.map((r) => (r.inspectionTime != null ? String(r.inspectionTime) : '')).find(Boolean) || '';
 
     const cableRes = await client.query(
       `INSERT INTO eol_cables (
@@ -242,15 +225,14 @@ async function insertCycleWithRecords(client, {
         defects.join(', '),
         recs.length,
         failCameraCount,
-        first.local,
-        first.raw,
+        receivedAt,
+        firstRaw,
       ]
     );
     const cable = cableRes.rows[0];
     cables.push(cable);
 
     for (const rec of recs) {
-      const t = parseIsoOrLocal(rec.inspectionTime);
       const imageUrl = rec.imageUrl || '';
       const markedImageUrl = rec.markedImageUrl || '';
       await client.query(
@@ -275,8 +257,8 @@ async function insertCycleWithRecords(client, {
           isFail(rec.passFail) ? 'Fail' : 'Pass',
           JSON.stringify(Array.isArray(rec.defects) ? rec.defects : []),
           rec.captureId != null ? String(rec.captureId) : '',
-          t.local,
-          t.raw,
+          receivedAt,
+          rec.inspectionTime != null ? String(rec.inspectionTime) : '',
           imageUrl,
           markedImageUrl,
         ]
@@ -297,7 +279,7 @@ async function ingestEol(body) {
       throw err;
     }
     return withTransaction((client) => insertCycleWithRecords(client, {
-      cycleTimestamp: body.cycleTimestamp,
+      cycleTimestamp: new Date().toISOString(),
       lineNumber: body.lineNumber || '',
       stationName: body.stationName || '',
       stageName: body.stageName || '',
@@ -339,7 +321,7 @@ async function ingestEol(body) {
         markedImageUrl: imageUrls[1] || imageUrls[0] || '',
       }];
       const result = await insertCycleWithRecords(client, {
-        cycleTimestamp: item.inspectionTime || new Date().toISOString(),
+        cycleTimestamp: new Date().toISOString(),
         lineNumber: item.lineNumber || '',
         stationName: item.stationName || '',
         stageName: item.stageName || '',
