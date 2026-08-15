@@ -48,7 +48,9 @@ function mapRow(row) {
     workStationCode: row.work_station_code,
     SN: row.sn,
     inspectionTime: formatWallClock(row.inspection_time)
-      || formatWallClock(row.inspection_time_raw),
+      || (row.created_at
+        ? formatInTz(row.created_at instanceof Date ? row.created_at : new Date(row.created_at))
+        : null),
     passFail: row.pass_fail,
     defectType: row.defect_type,
     imageUrls: row.image_urls || [],

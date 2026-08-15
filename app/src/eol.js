@@ -95,7 +95,7 @@ function mapCable(row) {
     cameraCount: row.camera_count || 0,
     failCameraCount: row.fail_camera_count || failCameras.length || 0,
     inspectionTime: formatWallClock(row.inspection_time)
-      || formatWallClock(row.inspection_time_raw),
+      || formatInTz(row.created_at instanceof Date ? row.created_at : new Date(row.created_at)),
     cycleTimestamp: row.cycle_timestamp,
     createdAt: row.created_at,
     unit: 'cable',
@@ -119,7 +119,9 @@ function mapRecord(row) {
     defectType: Array.isArray(row.defects) ? row.defects.join(', ') : (row.defect_type || ''),
     captureId: row.capture_id || '',
     inspectionTime: formatWallClock(row.inspection_time)
-      || formatWallClock(row.inspection_time_raw),
+      || (row.created_at
+        ? formatInTz(row.created_at instanceof Date ? row.created_at : new Date(row.created_at))
+        : null),
     imageUrl: row.image_url || '',
     markedImageUrl: row.marked_image_url || '',
     imageUrls: [row.image_url, row.marked_image_url].filter(Boolean),
