@@ -180,7 +180,34 @@ const mediaPan = { x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0
 const mediaEmbed = { reloadTimer: null, pendingReload: false, openUrl: '', mode: 'embed' };
 const capChoice = { el: null, payload: null };
 
+function clampMediaPan() {
+  const stage = $('mediaEmbedStage');
+  if (!stage) return;
+  const sw = stage.clientWidth || 1;
+  const sh = stage.clientHeight || 1;
+  const s = mediaZoom.value || 1;
+
+  let cw = sw;
+  let ch = sh;
+  if (mediaEmbed.mode === 'image') {
+    const image = $('mediaLightboxImage');
+    if (image?.naturalWidth && image?.naturalHeight) {
+      cw = image.naturalWidth;
+      ch = image.naturalHeight;
+    }
+  }
+
+  const scaledW = cw * s;
+  const scaledH = ch * s;
+  // Keep content inside the stage: when smaller, no pan; when larger, only within overflow.
+  const maxX = Math.max(0, (scaledW - sw) / 2);
+  const maxY = Math.max(0, (scaledH - sh) / 2);
+  mediaPan.x = Math.min(maxX, Math.max(-maxX, mediaPan.x));
+  mediaPan.y = Math.min(maxY, Math.max(-maxY, mediaPan.y));
+}
+
 function applyMediaTransform() {
+  clampMediaPan();
   const frame = $('mediaLightboxFrame');
   const image = $('mediaLightboxImage');
   const btn = $('mediaZoomReset');
@@ -249,6 +276,7 @@ function openMediaLightbox(url, { mode = 'embed', title = 'Captura' } = {}) {
   setMediaMode(mode === 'image' ? 'image' : 'embed');
 
   if (mode === 'image') {
+    image.onload = () => applyMediaTransform();
     image.src = url;
     applyMediaTransform();
   } else {
