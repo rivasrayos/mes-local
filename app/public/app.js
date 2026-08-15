@@ -231,6 +231,7 @@ function openMediaLightbox(url) {
   frame.addEventListener('load', onLoad);
   frame.src = bustEmbedUrl(url);
   applyMediaTransform();
+  document.body.style.overflow = 'hidden';
   $('mediaLightbox').classList.remove('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'false');
 }
@@ -243,6 +244,7 @@ function closeMediaLightbox() {
   mediaEmbed.pendingReload = false;
   mediaEmbed.openUrl = '';
   mediaPan.dragging = false;
+  document.body.style.overflow = '';
   $('mediaEmbedStage')?.classList.remove('is-dragging');
   $('mediaLightbox').classList.add('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'true');
