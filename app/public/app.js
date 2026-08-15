@@ -176,7 +176,7 @@ function renderImages(urls = []) {
 }
 
 const mediaZoom = { value: 1.75, min: 1, max: 3, step: 0.25 };
-const mediaEmbed = { reloadTimer: null, pendingReload: false };
+const mediaEmbed = { reloadTimer: null, pendingReload: false, openUrl: '' };
 
 function applyMediaZoom() {
   const frame = $('mediaLightboxFrame');
@@ -186,8 +186,15 @@ function applyMediaZoom() {
   if (btn) btn.textContent = `${Math.round(mediaZoom.value * 100)}%`;
 }
 
+function bustEmbedUrl(url) {
+  const clean = String(url || '').replace(/([?&])_mes_reload=\d+/g, '$1').replace(/[?&]$/, '');
+  const sep = clean.includes('?') ? '&' : '?';
+  return `${clean}${sep}_mes_reload=${Date.now()}`;
+}
+
 function openMediaLightbox(url) {
   mediaZoom.value = 1.75; // crop Overview grey margins by default
+  mediaEmbed.openUrl = url;
   $('mediaLightboxTitle').textContent = 'Vista con boundings';
   $('mediaLightboxOpen').href = url;
 
@@ -199,22 +206,22 @@ function openMediaLightbox(url) {
   mediaEmbed.pendingReload = true;
 
   const onLoad = () => {
-    // Overview embed often lays out wrong on first paint; one soft reload fixes it (like F5).
+    // Overview embed often lays out wrong on first paint; one forced reload (like F5) fixes it.
     if (!mediaEmbed.pendingReload) return;
     mediaEmbed.pendingReload = false;
     mediaEmbed.reloadTimer = setTimeout(() => {
       mediaEmbed.reloadTimer = null;
       if ($('mediaLightbox').classList.contains('hidden')) return;
       if (frame.src === 'about:blank') return;
-      frame.src = url;
+      frame.src = bustEmbedUrl(url);
       applyMediaZoom();
-    }, 200);
+    }, 350);
   };
 
   frame.removeEventListener('load', frame._eolEmbedOnLoad);
   frame._eolEmbedOnLoad = onLoad;
   frame.addEventListener('load', onLoad);
-  frame.src = url;
+  frame.src = bustEmbedUrl(url);
   applyMediaZoom();
   $('mediaLightbox').classList.remove('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'false');
@@ -226,6 +233,7 @@ function closeMediaLightbox() {
     mediaEmbed.reloadTimer = null;
   }
   mediaEmbed.pendingReload = false;
+  mediaEmbed.openUrl = '';
   $('mediaLightbox').classList.add('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'true');
   const frame = $('mediaLightboxFrame');
@@ -235,6 +243,19 @@ function closeMediaLightbox() {
   }
   frame.src = 'about:blank';
   frame.style.transform = '';
+}
+
+function reloadMediaEmbed() {
+  const frame = $('mediaLightboxFrame');
+  const url = mediaEmbed.openUrl;
+  if (!frame || !url) return;
+  if (mediaEmbed.reloadTimer) {
+    clearTimeout(mediaEmbed.reloadTimer);
+    mediaEmbed.reloadTimer = null;
+  }
+  mediaEmbed.pendingReload = false;
+  frame.src = bustEmbedUrl(url);
+  applyMediaZoom();
 }
 
 function wireImageActions(root) {
