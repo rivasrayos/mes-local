@@ -175,15 +175,23 @@ function renderImages(urls = []) {
   }).join('') || '<span>—</span>';
 }
 
-const mediaZoom = { value: 1, min: 0.75, max: 3, step: 0.25 };
+const mediaZoom = { value: 1, min: 0.5, max: 4, step: 0.15 };
+const mediaPan = { x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 };
 const mediaEmbed = { reloadTimer: null, pendingReload: false, openUrl: '' };
 
-function applyMediaZoom() {
+function applyMediaTransform() {
   const frame = $('mediaLightboxFrame');
   const btn = $('mediaZoomReset');
   if (!frame) return;
-  frame.style.transform = `translate(-50%, -50%) scale(${mediaZoom.value})`;
+  frame.style.transform = `translate(calc(-50% + ${mediaPan.x}px), calc(-50% + ${mediaPan.y}px)) scale(${mediaZoom.value})`;
   if (btn) btn.textContent = `${Math.round(mediaZoom.value * 100)}%`;
+}
+
+function resetMediaView(zoom = 1) {
+  mediaZoom.value = zoom;
+  mediaPan.x = 0;
+  mediaPan.y = 0;
+  applyMediaTransform();
 }
 
 function bustEmbedUrl(url) {
@@ -193,7 +201,6 @@ function bustEmbedUrl(url) {
 }
 
 function openMediaLightbox(url) {
-  mediaZoom.value = 1;
   mediaEmbed.openUrl = url;
   $('mediaLightboxTitle').textContent = 'Vista con boundings';
   $('mediaLightboxOpen').href = url;
@@ -204,6 +211,7 @@ function openMediaLightbox(url) {
     mediaEmbed.reloadTimer = null;
   }
   mediaEmbed.pendingReload = true;
+  resetMediaView(1);
 
   const onLoad = () => {
     // Overview embed often lays out wrong on first paint; one forced reload (like F5) fixes it.
@@ -214,7 +222,7 @@ function openMediaLightbox(url) {
       if ($('mediaLightbox').classList.contains('hidden')) return;
       if (frame.src === 'about:blank') return;
       frame.src = bustEmbedUrl(url);
-      applyMediaZoom();
+      applyMediaTransform();
     }, 350);
   };
 
@@ -222,7 +230,7 @@ function openMediaLightbox(url) {
   frame._eolEmbedOnLoad = onLoad;
   frame.addEventListener('load', onLoad);
   frame.src = bustEmbedUrl(url);
-  applyMediaZoom();
+  applyMediaTransform();
   $('mediaLightbox').classList.remove('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'false');
 }
@@ -234,6 +242,8 @@ function closeMediaLightbox() {
   }
   mediaEmbed.pendingReload = false;
   mediaEmbed.openUrl = '';
+  mediaPan.dragging = false;
+  $('mediaEmbedStage')?.classList.remove('is-dragging');
   $('mediaLightbox').classList.add('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'true');
   const frame = $('mediaLightboxFrame');
@@ -254,8 +264,54 @@ function reloadMediaEmbed() {
     mediaEmbed.reloadTimer = null;
   }
   mediaEmbed.pendingReload = false;
+  resetMediaView(mediaZoom.value);
   frame.src = bustEmbedUrl(url);
-  applyMediaZoom();
+  applyMediaTransform();
+}
+
+function wireMediaStageInteractions() {
+  const stage = $('mediaEmbedStage');
+  if (!stage || stage.dataset.wired === '1') return;
+  stage.dataset.wired = '1';
+
+  stage.addEventListener('wheel', (e) => {
+    if ($('mediaLightbox').classList.contains('hidden')) return;
+    e.preventDefault();
+    const dir = e.deltaY > 0 ? -1 : 1;
+    mediaZoom.value = Math.min(
+      mediaZoom.max,
+      Math.max(mediaZoom.min, mediaZoom.value + dir * mediaZoom.step)
+    );
+    applyMediaTransform();
+  }, { passive: false });
+
+  stage.addEventListener('pointerdown', (e) => {
+    if ($('mediaLightbox').classList.contains('hidden')) return;
+    if (e.button !== 0) return;
+    mediaPan.dragging = true;
+    mediaPan.startX = e.clientX;
+    mediaPan.startY = e.clientY;
+    mediaPan.originX = mediaPan.x;
+    mediaPan.originY = mediaPan.y;
+    stage.classList.add('is-dragging');
+    stage.setPointerCapture(e.pointerId);
+  });
+
+  stage.addEventListener('pointermove', (e) => {
+    if (!mediaPan.dragging) return;
+    mediaPan.x = mediaPan.originX + (e.clientX - mediaPan.startX);
+    mediaPan.y = mediaPan.originY + (e.clientY - mediaPan.startY);
+    applyMediaTransform();
+  });
+
+  const endDrag = (e) => {
+    if (!mediaPan.dragging) return;
+    mediaPan.dragging = false;
+    stage.classList.remove('is-dragging');
+    try { stage.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  };
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
 }
 
 function wireImageActions(root) {
@@ -935,19 +991,19 @@ function wireUi() {
   });
   $('mediaZoomIn').addEventListener('click', () => {
     mediaZoom.value = Math.min(mediaZoom.max, mediaZoom.value + mediaZoom.step);
-    applyMediaZoom();
+    applyMediaTransform();
   });
   $('mediaZoomOut').addEventListener('click', () => {
     mediaZoom.value = Math.max(mediaZoom.min, mediaZoom.value - mediaZoom.step);
-    applyMediaZoom();
+    applyMediaTransform();
   });
   $('mediaZoomReset').addEventListener('click', () => {
-    mediaZoom.value = 1;
-    applyMediaZoom();
+    resetMediaView(1);
   });
   document.querySelector('.media-lightbox-panel')?.addEventListener('click', (e) => {
     e.stopPropagation();
   });
+  wireMediaStageInteractions();
 
   $('deleteBeforeBtn').addEventListener('click', async () => {
     const v = $('deleteBefore').value;

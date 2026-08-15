@@ -637,8 +637,10 @@ th {
 }
 
 .media-lightbox-panel {
-  width: min(1180px, 94vw);
-  height: min(820px, 88vh);
+  width: min(1120px, 94vw);
+  height: min(560px, 72vh);
+  aspect-ratio: 16 / 9;
+  max-height: 72vh;
   background: #101820;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
@@ -657,6 +659,7 @@ th {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(15, 23, 29, 0.98);
   color: #e8eef3;
+  flex-shrink: 0;
 }
 
 .media-lightbox-panel header h2 {
@@ -677,6 +680,12 @@ th {
   min-height: 0;
   overflow: hidden;
   background: #0b1116;
+  cursor: grab;
+  touch-action: none;
+}
+
+.embed-stage.is-dragging {
+  cursor: grabbing;
 }
 
 .media-lightbox-panel iframe {
@@ -689,6 +698,7 @@ th {
   background: #0b1116;
   transform: translate(-50%, -50%) scale(1);
   transform-origin: center center;
+  pointer-events: none; /* pan/zoom handled by stage */
 }
 
 @media (max-width: 900px) {
@@ -698,7 +708,9 @@ th {
 
   .media-lightbox-panel {
     width: 100%;
-    height: 92vh;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    max-height: 85vh;
     border-radius: 10px;
   }
 }
