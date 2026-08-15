@@ -618,7 +618,9 @@ async function loadEolInspections() {
     const sn = item.sn || item.SN || '';
     const positions = Array.isArray(item.positions) ? item.positions.join(', ') : '';
     const captureIds = Array.isArray(item.captureIds) ? item.captureIds.join(', ') : '';
-    const camFails = Number(item.failCameraCount) || 0;
+    const failCams = Array.isArray(item.failCameras) && item.failCameras.length
+      ? item.failCameras.join(', ')
+      : '';
     return `
     <tr>
       <td>${item.inspectionTime || ''}</td>
@@ -626,7 +628,7 @@ async function loadEolInspections() {
       <td>${sn}</td>
       <td>${positions || '—'}</td>
       <td title="${captureIds}">${captureIds || '—'}</td>
-      <td title="Cámaras con fail">${camFails > 0 ? camFails : '—'}</td>
+      <td title="${failCams || 'Sin fails de cámara'}">${failCams || '—'}</td>
       <td><span class="badge ${(item.passFail || '').toLowerCase()}">${item.passFail || ''}</span></td>
       <td title="${item.defectType || ''}">${(item.defectType || '').slice(0, 40)}</td>
       <td><button class="btn" data-eol-id="${item.id}">Ver</button></td>

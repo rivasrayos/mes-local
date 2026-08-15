@@ -43,8 +43,32 @@ function isFail(value) {
   return String(value || '').toLowerCase() === 'fail';
 }
 
+function resolveViewLabel(viewName, cameraId, imageUrl) {
+  const map = config.eolCameraMap || {};
+  if (viewName && String(viewName).trim()) {
+    const v = String(viewName).trim();
+    if (map[v]) return map[v];
+    if (/^EOL\d+/i.test(v)) return v;
+    return v;
+  }
+  if (cameraId && map[cameraId]) return map[cameraId];
+  const host = hostFromUrl(imageUrl);
+  if (host && map[host]) return map[host];
+  return cameraId || '';
+}
+
 function mapCable(row) {
   if (!row) return null;
+  const failCamsRaw = Array.isArray(row.fail_cameras) ? row.fail_cameras : [];
+  const failCameras = [...new Set(
+    failCamsRaw
+      .map((f) => {
+        if (!f || typeof f !== 'object') return resolveViewLabel(f, '', '');
+        return resolveViewLabel(f.view_name, f.camera_id, f.image_url);
+      })
+      .filter(Boolean)
+  )].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+
   return {
     id: row.id,
     cycleId: row.cycle_id,
@@ -54,10 +78,11 @@ function mapCable(row) {
     stageName: row.stage_name || '',
     positions: row.positions || [],
     captureIds: row.capture_ids || [],
+    failCameras,
     passFail: row.pass_fail,
     defectType: row.defect_type || '',
     cameraCount: row.camera_count || 0,
-    failCameraCount: row.fail_camera_count || 0,
+    failCameraCount: row.fail_camera_count || failCameras.length || 0,
     inspectionTime: row.inspection_time_raw || (row.inspection_time
       ? String(row.inspection_time).replace('T', ' ').slice(0, 19)
       : null),
@@ -328,7 +353,17 @@ async function listEol(q = {}) {
                   AND r.capture_id <> ''
                 ORDER BY r.capture_id, r.position NULLS LAST, r.view_name, r.camera_id
               ) x
-            ), '[]'::jsonb) AS capture_ids
+            ), '[]'::jsonb) AS capture_ids,
+            COALESCE((
+              SELECT jsonb_agg(DISTINCT jsonb_build_object(
+                'view_name', COALESCE(NULLIF(r.view_name, ''), ''),
+                'camera_id', COALESCE(r.camera_id, ''),
+                'image_url', COALESCE(r.image_url, '')
+              ))
+              FROM eol_records r
+              WHERE r.cable_id = c.id
+                AND LOWER(r.pass_fail) = 'fail'
+            ), '[]'::jsonb) AS fail_cameras
      FROM eol_cables c
      JOIN eol_cycles cy ON cy.id = c.cycle_id
      ${whereSql}
@@ -640,7 +675,7 @@ async function deleteEolByDateRange({ from, to, before }) {
 function toEolCsv(items) {
   const headers = [
     'id', 'cycleId', 'sn', 'lineNumber', 'stationName', 'positions', 'captureIds',
-    'passFail', 'defectType', 'cameraCount', 'failCameraCount',
+    'failCameras', 'passFail', 'defectType', 'cameraCount', 'failCameraCount',
     'inspectionTime', 'createdAt',
   ];
   const escape = (v) => {
@@ -658,6 +693,7 @@ function toEolCsv(items) {
       item.stationName,
       Array.isArray(item.positions) ? item.positions.join('|') : '',
       Array.isArray(item.captureIds) ? item.captureIds.join('|') : '',
+      Array.isArray(item.failCameras) ? item.failCameras.join('|') : '',
       item.passFail,
       item.defectType,
       item.cameraCount,
