@@ -176,6 +176,7 @@ function renderImages(urls = []) {
 }
 
 const mediaZoom = { value: 1.75, min: 1, max: 3, step: 0.25 };
+const mediaEmbed = { reloadTimer: null, pendingReload: false };
 
 function applyMediaZoom() {
   const frame = $('mediaLightboxFrame');
@@ -189,17 +190,51 @@ function openMediaLightbox(url) {
   mediaZoom.value = 1.75; // crop Overview grey margins by default
   $('mediaLightboxTitle').textContent = 'Vista con boundings';
   $('mediaLightboxOpen').href = url;
-  $('mediaLightboxFrame').src = url;
+
+  const frame = $('mediaLightboxFrame');
+  if (mediaEmbed.reloadTimer) {
+    clearTimeout(mediaEmbed.reloadTimer);
+    mediaEmbed.reloadTimer = null;
+  }
+  mediaEmbed.pendingReload = true;
+
+  const onLoad = () => {
+    // Overview embed often lays out wrong on first paint; one soft reload fixes it (like F5).
+    if (!mediaEmbed.pendingReload) return;
+    mediaEmbed.pendingReload = false;
+    mediaEmbed.reloadTimer = setTimeout(() => {
+      mediaEmbed.reloadTimer = null;
+      if ($('mediaLightbox').classList.contains('hidden')) return;
+      if (frame.src === 'about:blank') return;
+      frame.src = url;
+      applyMediaZoom();
+    }, 200);
+  };
+
+  frame.removeEventListener('load', frame._eolEmbedOnLoad);
+  frame._eolEmbedOnLoad = onLoad;
+  frame.addEventListener('load', onLoad);
+  frame.src = url;
   applyMediaZoom();
   $('mediaLightbox').classList.remove('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'false');
 }
 
 function closeMediaLightbox() {
+  if (mediaEmbed.reloadTimer) {
+    clearTimeout(mediaEmbed.reloadTimer);
+    mediaEmbed.reloadTimer = null;
+  }
+  mediaEmbed.pendingReload = false;
   $('mediaLightbox').classList.add('hidden');
   $('mediaLightbox').setAttribute('aria-hidden', 'true');
-  $('mediaLightboxFrame').src = 'about:blank';
-  $('mediaLightboxFrame').style.transform = '';
+  const frame = $('mediaLightboxFrame');
+  if (frame?._eolEmbedOnLoad) {
+    frame.removeEventListener('load', frame._eolEmbedOnLoad);
+    frame._eolEmbedOnLoad = null;
+  }
+  frame.src = 'about:blank';
+  frame.style.transform = '';
 }
 
 function wireImageActions(root) {
