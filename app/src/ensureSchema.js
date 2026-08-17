@@ -97,26 +97,6 @@ async function ensureSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_records_cable ON eol_records (cable_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_records_cycle ON eol_records (cycle_id)`);
 
-  // Prefer DB arrival time (created_at) over machine ISO payloads for display.
-  // Safe to re-run: only touches rows whose raw time is still an ISO/Z string.
-  await query(`
-    UPDATE eol_cables
-    SET inspection_time = (created_at AT TIME ZONE 'America/Los_Angeles')
-    WHERE inspection_time_raw ~* 'T.*Z$'
-  `).catch(() => {});
-
-  await query(`
-    UPDATE eol_records
-    SET inspection_time = (created_at AT TIME ZONE 'America/Los_Angeles')
-    WHERE inspection_time_raw ~* 'T.*Z$'
-  `).catch(() => {});
-
-  await query(`
-    UPDATE inspections
-    SET inspection_time = (created_at AT TIME ZONE 'America/Los_Angeles')
-    WHERE inspection_time_raw ~* 'T.*Z$'
-  `).catch(() => {});
-
   // Backfill view labels from known cameraId → EOL1..EOL5 map
   const { eolCameraMap } = require('./config');
   for (const [key, label] of Object.entries(eolCameraMap || {})) {
