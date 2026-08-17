@@ -25,9 +25,8 @@ function formatWallClock(value) {
   if (value == null || value === '') return null;
 
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    // timestamp without time zone from node-pg: wall clock lives in UTC fields
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())} ${pad(value.getUTCHours())}:${pad(value.getUTCMinutes())}:${pad(value.getUTCSeconds())}`;
+    // Instant → plant wall clock (created_at timestamptz, etc.)
+    return formatInTz(value);
   }
 
   const s = String(value).trim();
