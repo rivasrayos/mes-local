@@ -24,8 +24,24 @@ app.use((err, _req, res, _next) => {
   });
 });
 
+async function waitForDb({ attempts = 60, delayMs = 2000 } = {}) {
+  let lastErr;
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      await pool.query('SELECT 1');
+      if (i > 1) console.log(`Database ready after ${i} attempt(s)`);
+      return;
+    } catch (err) {
+      lastErr = err;
+      console.error(`Waiting for database (${i}/${attempts}): ${err.message}`);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr || new Error('Database not reachable');
+}
+
 async function start() {
-  await pool.query('SELECT 1');
+  await waitForDb();
   await ensureSchema();
   app.listen(config.port, '0.0.0.0', () => {
     console.log(`MES Local (IMLA/EOL) listening on :${config.port}`);
