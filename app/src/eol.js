@@ -177,6 +177,13 @@ function buildCableFilters(q) {
     params.push(value);
   };
 
+  // Hide incomplete legacy rows (Pos empty / single "legacy" camera)
+  where.push(`NOT EXISTS (
+    SELECT 1 FROM eol_records r
+    WHERE r.cable_id = c.id
+      AND lower(coalesce(r.camera_id, '')) = 'legacy'
+  )`);
+
   if (q.lineNumber) add('c.line_number = ?', q.lineNumber);
   if (q.passFail) add('c.pass_fail = ?', q.passFail);
   if (q.sn) add('c.sn ILIKE ?', `%${q.sn}%`);
@@ -239,7 +246,12 @@ async function insertCycleWithRecords(client, {
 
   const cables = [];
   for (const [sn, recs] of bySn.entries()) {
-    const positions = [...new Set(recs.map((r) => Number(r.position)).filter((n) => !Number.isNaN(n)))].sort((a, b) => a - b);
+    const positions = [...new Set(
+      recs
+        .filter((r) => r.position != null && r.position !== '')
+        .map((r) => Number(r.position))
+        .filter((n) => !Number.isNaN(n))
+    )].sort((a, b) => a - b);
     const anyFail = recs.some((r) => isFail(r.passFail));
     const defects = [...new Set(recs.flatMap((r) => (Array.isArray(r.defects) ? r.defects : [])))];
     const failCameraCount = recs.filter((r) => isFail(r.passFail)).length;
@@ -330,6 +342,7 @@ async function ingestEol(body) {
   }
 
   // Legacy flat object / array / { data: [] }
+  // Skip incomplete old-format posts (no real camera) — they create Pos 0 / empty EOL rows.
   let flats = [];
   if (Array.isArray(body)) flats = body;
   else if (Array.isArray(body?.data)) flats = body.data;
@@ -338,6 +351,21 @@ async function ingestEol(body) {
     const err = new Error('Body must be a cycle { records: [...] } or a legacy EOL object');
     err.status = 400;
     throw err;
+  }
+
+  flats = flats.filter((item) => {
+    const cameraId = String(item.cameraId || item.view || '').trim();
+    const captureId = item.captureId != null ? String(item.captureId).trim() : '';
+    const hasImages = Array.isArray(item.imageUrls) && item.imageUrls.some(Boolean);
+    // Require a real camera label or at least capture/image evidence
+    if (!cameraId || /^legacy$/i.test(cameraId)) {
+      return Boolean(captureId || hasImages);
+    }
+    return true;
+  });
+
+  if (!flats.length) {
+    return { received: 0, recordCount: 0, cycleIds: [], skipped: 'incomplete_legacy' };
   }
 
   return withTransaction(async (client) => {
