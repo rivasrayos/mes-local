@@ -209,6 +209,53 @@ function isLegacyFlat(body) {
     && (body.SN != null || body.sn != null || body.passFail != null);
 }
 
+/** Merge window: same SN on a line often arrives as two half-cycles (pos 1 then 5). */
+const CABLE_MERGE_WINDOW_MINUTES = 5;
+
+function collectPositions(recs) {
+  return [...new Set(
+    recs
+      .filter((r) => r.position != null && r.position !== '')
+      .map((r) => Number(r.position))
+      .filter((n) => !Number.isNaN(n))
+  )].sort((a, b) => a - b);
+}
+
+async function refreshCableAggregates(client, cableId) {
+  await client.query(
+    `UPDATE eol_cables c SET
+       positions = COALESCE((
+         SELECT jsonb_agg(p ORDER BY p)
+         FROM (
+           SELECT DISTINCT position AS p
+           FROM eol_records
+           WHERE cable_id = c.id AND position IS NOT NULL
+         ) t
+       ), '[]'::jsonb),
+       camera_count = (SELECT COUNT(*)::int FROM eol_records WHERE cable_id = c.id),
+       fail_camera_count = (
+         SELECT COUNT(*)::int FROM eol_records
+         WHERE cable_id = c.id AND LOWER(pass_fail) = 'fail'
+       ),
+       pass_fail = CASE
+         WHEN EXISTS (
+           SELECT 1 FROM eol_records
+           WHERE cable_id = c.id AND LOWER(pass_fail) = 'fail'
+         ) THEN 'Fail' ELSE 'Pass'
+       END,
+       defect_type = COALESCE((
+         SELECT string_agg(DISTINCT trim(d), ', ')
+         FROM eol_records r,
+              LATERAL jsonb_array_elements_text(COALESCE(r.defects, '[]'::jsonb)) AS d
+         WHERE r.cable_id = c.id AND trim(d) <> ''
+       ), '')
+     WHERE c.id = $1`,
+    [cableId]
+  );
+  const updated = await client.query(`SELECT * FROM eol_cables WHERE id = $1`, [cableId]);
+  return updated.rows[0];
+}
+
 async function insertCycleWithRecords(client, {
   cycleTimestamp,
   lineNumber,
@@ -246,46 +293,65 @@ async function insertCycleWithRecords(client, {
 
   const cables = [];
   for (const [sn, recs] of bySn.entries()) {
-    const positions = [...new Set(
-      recs
-        .filter((r) => r.position != null && r.position !== '')
-        .map((r) => Number(r.position))
-        .filter((n) => !Number.isNaN(n))
-    )].sort((a, b) => a - b);
+    const positions = collectPositions(recs);
     const anyFail = recs.some((r) => isFail(r.passFail));
     const defects = [...new Set(recs.flatMap((r) => (Array.isArray(r.defects) ? r.defects : [])))];
     const failCameraCount = recs.filter((r) => isFail(r.passFail)).length;
     const firstRaw = recs.map((r) => (r.inspectionTime != null ? String(r.inspectionTime) : '')).find(Boolean) || '';
 
-    const cableRes = await client.query(
-      `INSERT INTO eol_cables (
-        cycle_id, sn, line_number, station_name, stage_name,
-        positions, pass_fail, defect_type, camera_count, fail_camera_count,
-        inspection_time, inspection_time_raw
-      ) VALUES (
-        $1,$2,$3,$4,$5,
-        $6::jsonb,$7,$8,$9,$10,
-        $11::timestamp,$12
-      ) RETURNING *`,
-      [
-        cycle.id,
-        sn,
-        lineNumber || '',
-        stationName || '',
-        stageName || '',
-        JSON.stringify(positions),
-        anyFail ? 'Fail' : 'Pass',
-        defects.join(', '),
-        recs.length,
-        failCameraCount,
-        receivedAt,
-        firstRaw,
-      ]
+    // If same SN arrived moments earlier (other end 1/5 etc.), merge into that cable
+    const existingRes = await client.query(
+      `SELECT * FROM eol_cables
+       WHERE sn = $1
+         AND line_number = $2
+         AND created_at > NOW() - make_interval(mins => $3)
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [sn, lineNumber || '', CABLE_MERGE_WINDOW_MINUTES]
     );
-    const cable = cableRes.rows[0];
-    cables.push(cable);
+    let cable = existingRes.rows[0] || null;
+
+    if (!cable) {
+      const cableRes = await client.query(
+        `INSERT INTO eol_cables (
+          cycle_id, sn, line_number, station_name, stage_name,
+          positions, pass_fail, defect_type, camera_count, fail_camera_count,
+          inspection_time, inspection_time_raw
+        ) VALUES (
+          $1,$2,$3,$4,$5,
+          $6::jsonb,$7,$8,$9,$10,
+          $11::timestamp,$12
+        ) RETURNING *`,
+        [
+          cycle.id,
+          sn,
+          lineNumber || '',
+          stationName || '',
+          stageName || '',
+          JSON.stringify(positions),
+          anyFail ? 'Fail' : 'Pass',
+          defects.join(', '),
+          recs.length,
+          failCameraCount,
+          receivedAt,
+          firstRaw,
+        ]
+      );
+      cable = cableRes.rows[0];
+    }
 
     for (const rec of recs) {
+      const captureId = rec.captureId != null ? String(rec.captureId) : '';
+      if (captureId) {
+        const dup = await client.query(
+          `SELECT id FROM eol_records
+           WHERE cable_id = $1 AND capture_id = $2
+           LIMIT 1`,
+          [cable.id, captureId]
+        );
+        if (dup.rows.length) continue;
+      }
+
       const imageUrl = rec.imageUrl || '';
       const markedImageUrl = rec.markedImageUrl || '';
       await client.query(
@@ -309,7 +375,7 @@ async function insertCycleWithRecords(client, {
           resolveCameraView(rec),
           isFail(rec.passFail) ? 'Fail' : 'Pass',
           JSON.stringify(Array.isArray(rec.defects) ? rec.defects : []),
-          rec.captureId != null ? String(rec.captureId) : '',
+          captureId,
           receivedAt,
           rec.inspectionTime != null ? String(rec.inspectionTime) : '',
           imageUrl,
@@ -317,6 +383,9 @@ async function insertCycleWithRecords(client, {
         ]
       );
     }
+
+    cable = await refreshCableAggregates(client, cable.id);
+    cables.push(cable);
   }
 
   return { cycle, cables, received: cables.length, recordCount: records.length };
