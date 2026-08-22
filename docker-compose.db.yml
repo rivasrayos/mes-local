@@ -12,7 +12,9 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # Mount the directory (not a single file). File binds often break after
+      # Docker Desktop / WSL reboot with exit 127 ("not a directory").
+      - ./db:/docker-entrypoint-initdb.d:ro
     networks:
       - mes-imla-net
     healthcheck:
