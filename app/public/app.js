@@ -180,55 +180,78 @@ function renderNtpResults(data) {
   `;
 }
 
-function renderDiagCard(cam) {
-  const reg = cam.registry || {};
-  const recipe = cam.recipe || {};
-  const storage = cam.storage || {};
-  const warn = (cam.warnings || []).map((w) => `<li>${esc(w)}</li>`).join('');
-  const statusClass = cam.online ? 'ok' : 'err';
-  const statusLabel = cam.online ? 'En línea' : 'Sin respuesta';
-  const deploy = cam.deployment
-    ? (cam.deployment.overallDeployed ? 'OK' : 'Pendiente')
-    : '—';
-  const skew = cam.clockSkewSec == null
-    ? '—'
-    : `${cam.clockSkewSec > 0 ? '+' : ''}${cam.clockSkewSec}s`;
-  const title = [reg.lineNumber, (reg.product || '').toUpperCase(), reg.role].filter(Boolean).join(' · ')
-    || cam.ip;
+function renderDiagTable(cams = []) {
+  if (!cams.length) return '<p class="settings-hint">Sin datos</p>';
+  const rows = cams.map((cam) => {
+    const reg = cam.registry || {};
+    const recipe = cam.recipe || {};
+    const storage = cam.storage || {};
+    const statusLabel = cam.online ? 'En línea' : 'Sin respuesta';
+    const deploy = cam.deployment
+      ? (cam.deployment.overallDeployed ? 'OK' : 'Pendiente')
+      : '—';
+    const skew = cam.clockSkewSec == null
+      ? '—'
+      : `${cam.clockSkewSec > 0 ? '+' : ''}${cam.clockSkewSec}s`;
+    const ntp = cam.ntp?.enabled == null
+      ? '—'
+      : (cam.ntp.enabled
+        ? `ON · ${(cam.ntp.servers || []).join(', ') || 'sin servidor'}`
+        : 'OFF');
+    const warns = (cam.warnings || []).join('; ');
+    const recipeLabel = recipe.name
+      ? `${recipe.name}${recipe.plcRecipeId != null ? ` (PLC ${recipe.plcRecipeId})` : ''}`
+      : '—';
+    const disk = storage.percent != null
+      ? `${storage.percent}%`
+      : '—';
+    return `
+      <tr class="${cam.online ? 'ok' : 'err'}">
+        <td>${esc(reg.lineNumber || '—')}</td>
+        <td>${esc((reg.product || '').toUpperCase() || '—')}</td>
+        <td>${esc(reg.role || '—')}</td>
+        <td>${esc(cam.ip || '—')}</td>
+        <td><span class="badge ${cam.online ? 'pass' : 'fail'}">${statusLabel}</span></td>
+        <td>${esc(cam.serialNumber || '—')}</td>
+        <td>${esc(cam.version || '—')}</td>
+        <td title="${esc(cam.hostname || cam.deviceName || '')}">${esc(cam.hostname || cam.deviceName || '—')}</td>
+        <td title="${esc(recipeLabel)}">${esc(recipeLabel)}</td>
+        <td>${esc(deploy)}</td>
+        <td>${esc(disk)}</td>
+        <td>${esc(skew)}</td>
+        <td>${esc(ntp)}</td>
+        <td>${esc(cam.industrialProtocol || '—')}</td>
+        <td>${esc(cam.env?.lineCode || '—')}</td>
+        <td class="diag-warn-cell" title="${esc(warns)}">${esc(warns || '—')}</td>
+      </tr>`;
+  }).join('');
 
   return `
-    <article class="diag-card ${statusClass}">
-      <header>
-        <div>
-          <h3>${esc(title)}</h3>
-          <p class="muted">${esc(cam.ip)}${cam.latencyMs != null ? ` · ${cam.latencyMs} ms` : ''}</p>
-        </div>
-        <span class="badge ${cam.online ? 'pass' : 'fail'}">${statusLabel}</span>
-      </header>
-      <dl class="diag-kv">
-        <div><dt>Serial</dt><dd>${esc(cam.serialNumber || '—')}</dd></div>
-        <div><dt>Versión</dt><dd>${esc(cam.version || '—')}</dd></div>
-        <div><dt>Hostname</dt><dd>${esc(cam.hostname || cam.deviceName || '—')}</dd></div>
-        <div><dt>Receta</dt><dd>${esc(recipe.name || '—')}${recipe.plcRecipeId != null ? ` (PLC ${esc(recipe.plcRecipeId)})` : ''}</dd></div>
-        <div><dt>Bloques</dt><dd>${esc((recipe.blocks || []).join(', ') || '—')}</dd></div>
-        <div><dt>Deploy</dt><dd>${esc(deploy)}</dd></div>
-        <div><dt>Disco</dt><dd>${storage.percent != null ? `${esc(storage.percent)}% · libre ${esc(storage.freeLabel || '—')}` : '—'}</dd></div>
-        <div><dt>Red</dt><dd>${esc(cam.network?.address || '—')}${cam.network?.mac ? ` · ${esc(cam.network.mac)}` : ''}</dd></div>
-        <div><dt>Instalación / uptime</dt><dd>${esc(cam.uptimeLabel || cam.env?.dateInstalled || '—')}</dd></div>
-        <div><dt>Skew reloj</dt><dd>${esc(skew)}</dd></div>
-        <div><dt>Industrial</dt><dd>${esc(cam.industrialProtocol || '—')}</dd></div>
-        <div><dt>LINE_CODE</dt><dd>${esc(cam.env?.lineCode || '—')}</dd></div>
-        <div><dt>NTP</dt><dd>${
-          cam.ntp?.enabled == null
-            ? '—'
-            : (cam.ntp.enabled
-              ? `ON · ${(cam.ntp.servers || []).join(', ') || 'sin servidor'}`
-              : 'OFF')
-        }</dd></div>
-      </dl>
-      ${warn ? `<ul class="diag-warn">${warn}</ul>` : ''}
-    </article>
-  `;
+    <div class="table-wrap diag-table-wrap">
+      <table class="diag-table">
+        <thead>
+          <tr>
+            <th>Línea</th>
+            <th>Producto</th>
+            <th>Rol</th>
+            <th>IP</th>
+            <th>Estado</th>
+            <th>Serial</th>
+            <th>Versión</th>
+            <th>Hostname</th>
+            <th>Receta</th>
+            <th>Deploy</th>
+            <th>Disco</th>
+            <th>Skew</th>
+            <th>NTP</th>
+            <th>Industrial</th>
+            <th>LINE_CODE</th>
+            <th>Avisos</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 async function loadCameraStatusUi() {
@@ -252,7 +275,7 @@ async function loadCameraStatusUi() {
       box.innerHTML = '<p class="settings-hint">No hay cámaras registradas. Agrégalas en «Cámaras Overview».</p>';
       return;
     }
-    box.innerHTML = cams.map(renderDiagCard).join('');
+    box.innerHTML = renderDiagTable(cams);
   } catch (err) {
     box.innerHTML = `<p class="settings-msg err">${esc(err.message || err)}</p>`;
   }
