@@ -1,0 +1,77 @@
+{
+  "savedAt": "2026-08-24T16:33:00Z",
+  "items": [
+    {
+      "ip": "192.168.11.174",
+      "serialNumber": "gsac586514",
+      "cameraId": "ov80i-gsac586514",
+      "lineNumber": "L11",
+      "product": "eol",
+      "role": "EOL1"
+    },
+    {
+      "ip": "192.168.11.175",
+      "serialNumber": "gsac586492",
+      "cameraId": "ov80i-gsac586492",
+      "lineNumber": "L11",
+      "product": "eol",
+      "role": "EOL2"
+    },
+    {
+      "ip": "192.168.11.176",
+      "serialNumber": "gsac586484",
+      "cameraId": "ov80i-gsac586484",
+      "lineNumber": "L11",
+      "product": "eol",
+      "role": "EOL3"
+    },
+    {
+      "ip": "192.168.11.177",
+      "serialNumber": "gsac586513",
+      "cameraId": "ov80i-gsac586513",
+      "lineNumber": "L11",
+      "product": "eol",
+      "role": "EOL4"
+    },
+    {
+      "ip": "192.168.11.178",
+      "serialNumber": "gsac586500",
+      "cameraId": "ov80i-gsac586500",
+      "lineNumber": "L11",
+      "product": "eol",
+      "role": "EOL5"
+    },
+    {
+      "ip": "192.168.11.80",
+      "serialNumber": "gsac586477",
+      "cameraId": "ov80i-gsac586477",
+      "lineNumber": "L11",
+      "product": "imla",
+      "role": "BOT"
+    },
+    {
+      "ip": "192.168.11.81",
+      "serialNumber": "gsac586504",
+      "cameraId": "ov80i-gsac586504",
+      "lineNumber": "L11",
+      "product": "imla",
+      "role": "TOP"
+    },
+    {
+      "ip": "192.168.10.174",
+      "serialNumber": "gsac586465",
+      "cameraId": "ov80i-gsac586465",
+      "lineNumber": "L10",
+      "product": "eol",
+      "role": "EOL1"
+    },
+    {
+      "ip": "192.168.10.175",
+      "serialNumber": "gsac586482",
+      "cameraId": "ov80i-gsac586482",
+      "lineNumber": "L10",
+      "product": "eol",
+      "role": "EOL2"
+    }
+  ]
+}

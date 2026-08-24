@@ -16,6 +16,9 @@ services:
       RESPONSE_BODY: ${RESPONSE_BODY:-{"ok":true,"received":{{received}}} }
     networks:
       - mes-imla-net
+    volumes:
+      # Survives Postgres re-init; camera registry JSON backup
+      - ./data/backups:/app/data/backups
     depends_on: []
 
 networks:

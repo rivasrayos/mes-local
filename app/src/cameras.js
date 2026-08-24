@@ -1,5 +1,10 @@
+const fs = require('fs');
+const path = require('path');
 const { query } = require('./db');
 const config = require('./config');
+
+const BACKUP_DIR = process.env.CAMERA_BACKUP_DIR || path.join(__dirname, '..', 'data', 'backups');
+const BACKUP_FILE = path.join(BACKUP_DIR, 'camera_registry.json');
 
 /** @type {object[]} */
 let registryEntries = [];
@@ -94,6 +99,59 @@ async function refreshCameraMapCache() {
      ORDER BY line_number, product, role, ip`
   ).catch(() => ({ rows: [] }));
   return indexRegistry(res.rows);
+}
+
+function writeCameraBackup(items = registryEntries) {
+  try {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const payload = {
+      savedAt: new Date().toISOString(),
+      items: (items || []).map((c) => ({
+        ip: c.ip,
+        serialNumber: c.serialNumber,
+        cameraId: c.cameraId,
+        lineNumber: c.lineNumber,
+        product: c.product,
+        role: c.role,
+      })),
+    };
+    fs.writeFileSync(BACKUP_FILE, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (e) {
+    console.error('camera registry backup failed:', e.message);
+  }
+}
+
+function readCameraBackup() {
+  try {
+    if (!fs.existsSync(BACKUP_FILE)) return [];
+    const raw = JSON.parse(fs.readFileSync(BACKUP_FILE, 'utf8'));
+    return Array.isArray(raw?.items) ? raw.items : (Array.isArray(raw) ? raw : []);
+  } catch (e) {
+    console.error('camera registry backup read failed:', e.message);
+    return [];
+  }
+}
+
+/** If DB registry is empty but file backup exists, re-insert rows. */
+async function restoreCameraBackupIfEmpty() {
+  const countRes = await query(`SELECT COUNT(*)::int AS n FROM camera_registry`).catch(() => ({ rows: [{ n: 0 }] }));
+  if ((countRes.rows[0]?.n || 0) > 0) {
+    writeCameraBackup(registryEntries);
+    return { restored: 0, skipped: true };
+  }
+  const items = readCameraBackup();
+  if (!items.length) return { restored: 0, skipped: false };
+  let restored = 0;
+  for (const item of items) {
+    try {
+      await upsertCamera(item);
+      restored += 1;
+    } catch (e) {
+      console.error('restore camera failed:', item?.ip, e.message);
+    }
+  }
+  console.log(`Restored ${restored} cameras from backup file`);
+  return { restored, skipped: false };
 }
 
 function getMergedCameraMap() {
@@ -351,6 +409,7 @@ async function upsertCamera({
       [host, serial, camId, line, pr.product, pr.role, camRow.id]
     );
     await refreshCameraMapCache();
+    writeCameraBackup();
     const item = mapRow(res.rows[0]);
     if (warning) item.warning = warning;
     return item;
@@ -371,6 +430,7 @@ async function upsertCamera({
       [host, serial, camId, slotRow.id]
     );
     await refreshCameraMapCache();
+    writeCameraBackup();
     const item = mapRow(res.rows[0]);
     item.warning = warning;
     return item;
@@ -384,6 +444,7 @@ async function upsertCamera({
     [host, serial, camId, line, pr.product, pr.role]
   );
   await refreshCameraMapCache();
+  writeCameraBackup();
   return mapRow(res.rows[0]);
 }
 
@@ -398,6 +459,7 @@ async function deleteCamera(id) {
     throw err;
   }
   await refreshCameraMapCache();
+  writeCameraBackup();
   return { deleted: true, id };
 }
 
@@ -408,6 +470,8 @@ module.exports = {
   upsertCamera,
   deleteCamera,
   refreshCameraMapCache,
+  restoreCameraBackupIfEmpty,
+  writeCameraBackup,
   getMergedCameraMap,
   getEolColumnLabels,
   lookupCamera,

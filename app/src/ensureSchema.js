@@ -122,8 +122,19 @@ async function ensureSchema() {
   );
 
   // Backfill view labels from known cameraId → EOL1..EOL5 map (+ registry)
-  const { getMergedCameraMap, refreshCameraMapCache, cameraKeyVariants } = require('./cameras');
+  const {
+    getMergedCameraMap,
+    refreshCameraMapCache,
+    cameraKeyVariants,
+    restoreCameraBackupIfEmpty,
+    writeCameraBackup,
+  } = require('./cameras');
   await refreshCameraMapCache().catch(() => {});
+  await restoreCameraBackupIfEmpty().catch((e) => {
+    console.error('camera backup restore failed:', e.message);
+  });
+  await refreshCameraMapCache().catch(() => {});
+  writeCameraBackup();
   const eolCameraMap = getMergedCameraMap();
   const seen = new Set();
   for (const [key, label] of Object.entries(eolCameraMap || {})) {
