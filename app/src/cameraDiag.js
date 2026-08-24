@@ -236,8 +236,6 @@ async function probeCamera(ipRaw, registry = null) {
     : [];
   if (ntpEnabled === true && !ntpServers.length) {
     warnings.push('NTP activo pero sin servidor configurado');
-  } else if (ntpEnabled === false) {
-    warnings.push('NTP desactivado');
   }
 
   if (!online) warnings.push('Cámara no responde');
