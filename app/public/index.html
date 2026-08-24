@@ -127,6 +127,30 @@
 
       <div class="settings-block">
         <h3>Cámaras registradas</h3>
+        <div class="settings-row wrap cam-filter-row">
+          <label class="field">
+            <span>Filtrar línea</span>
+            <select id="camFilterLine">
+              <option value="">Todas</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Filtrar producto</span>
+            <select id="camFilterProduct">
+              <option value="">Todos</option>
+              <option value="eol">EOL</option>
+              <option value="imla">IMLA</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Filtrar rol</span>
+            <select id="camFilterRole">
+              <option value="">Todos</option>
+            </select>
+          </label>
+          <button id="camFilterClearBtn" class="btn" type="button">Limpiar</button>
+        </div>
+        <p id="camFilterMeta" class="settings-hint"></p>
         <div class="table-wrap">
           <table>
             <thead>

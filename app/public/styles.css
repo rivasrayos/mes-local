@@ -962,6 +962,10 @@ th {
   flex-wrap: wrap;
 }
 
+.cam-filter-row {
+  margin-bottom: 0.5rem;
+}
+
 .settings-row .field.grow {
   flex: 1;
   min-width: 180px;

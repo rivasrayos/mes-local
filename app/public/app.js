@@ -154,28 +154,84 @@ async function saveCameraUi() {
   }
 }
 
+let camRegistryItems = [];
+
+function fillSelectOptions(sel, values, allLabel) {
+  if (!sel) return;
+  const current = sel.value;
+  const opts = [`<option value="">${allLabel}</option>`]
+    .concat(values.map((v) => `<option value="${v}">${v}</option>`));
+  sel.innerHTML = opts.join('');
+  if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+}
+
+function syncCamFilterOptions(items = []) {
+  const lines = [...new Set(items.map((c) => c.lineNumber).filter(Boolean))]
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+  fillSelectOptions($('camFilterLine'), lines, 'Todas');
+
+  const product = ($('camFilterProduct')?.value || '').toLowerCase();
+  const rolesSrc = product
+    ? items.filter((c) => String(c.product || '').toLowerCase() === product)
+    : items;
+  const roles = [...new Set(rolesSrc.map((c) => c.role).filter(Boolean))]
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+  fillSelectOptions($('camFilterRole'), roles, 'Todos');
+}
+
+function getFilteredCameras() {
+  const line = ($('camFilterLine')?.value || '').trim().toUpperCase();
+  const product = ($('camFilterProduct')?.value || '').trim().toLowerCase();
+  const role = ($('camFilterRole')?.value || '').trim().toUpperCase();
+  return camRegistryItems.filter((c) => {
+    if (line && String(c.lineNumber || '').toUpperCase() !== line) return false;
+    if (product && String(c.product || '').toLowerCase() !== product) return false;
+    if (role && String(c.role || '').toUpperCase() !== role) return false;
+    return true;
+  });
+}
+
+function renderCameraRegistry() {
+  const tbody = $('camRegistryBody');
+  if (!tbody) return;
+  const items = getFilteredCameras();
+  const meta = $('camFilterMeta');
+  if (meta) {
+    meta.textContent = camRegistryItems.length
+      ? `Mostrando ${items.length} de ${camRegistryItems.length}`
+      : '';
+  }
+  if (!camRegistryItems.length) {
+    tbody.innerHTML = '<tr><td colspan="7">Sin cámaras aún</td></tr>';
+    return;
+  }
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="7">Ninguna cámara con ese filtro</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map((c) => `
+    <tr>
+      <td>${c.lineNumber || '—'}</td>
+      <td>${(c.product || '').toUpperCase()}</td>
+      <td>${c.role || '—'}</td>
+      <td>${c.ip || '—'}</td>
+      <td>${c.serialNumber || '—'}</td>
+      <td>${c.cameraId || '—'}</td>
+      <td><button type="button" class="btn" data-cam-del="${c.id}">Borrar</button></td>
+    </tr>
+  `).join('');
+}
+
 async function loadCameraRegistry() {
   const tbody = $('camRegistryBody');
   if (!tbody) return;
   try {
     const data = await api('/api/settings/cameras');
-    const items = data.items || [];
-    if (!items.length) {
-      tbody.innerHTML = '<tr><td colspan="7">Sin cámaras aún</td></tr>';
-      return;
-    }
-    tbody.innerHTML = items.map((c) => `
-      <tr>
-        <td>${c.lineNumber || '—'}</td>
-        <td>${(c.product || '').toUpperCase()}</td>
-        <td>${c.role || '—'}</td>
-        <td>${c.ip || '—'}</td>
-        <td>${c.serialNumber || '—'}</td>
-        <td>${c.cameraId || '—'}</td>
-        <td><button type="button" class="btn" data-cam-del="${c.id}">Borrar</button></td>
-      </tr>
-    `).join('');
+    camRegistryItems = data.items || [];
+    syncCamFilterOptions(camRegistryItems);
+    renderCameraRegistry();
   } catch (err) {
+    camRegistryItems = [];
     tbody.innerHTML = `<tr><td colspan="7">${err.message || err}</td></tr>`;
   }
 }
@@ -1281,6 +1337,22 @@ function wireUi() {
     const btn = e.target.closest('[data-cam-del]');
     if (!btn) return;
     deleteCameraUi(btn.getAttribute('data-cam-del')).catch(console.error);
+  });
+  const applyCamFilter = () => {
+    syncCamFilterOptions(camRegistryItems);
+    renderCameraRegistry();
+  };
+  $('camFilterLine')?.addEventListener('change', applyCamFilter);
+  $('camFilterProduct')?.addEventListener('change', () => {
+    if ($('camFilterRole')) $('camFilterRole').value = '';
+    applyCamFilter();
+  });
+  $('camFilterRole')?.addEventListener('change', applyCamFilter);
+  $('camFilterClearBtn')?.addEventListener('click', () => {
+    if ($('camFilterLine')) $('camFilterLine').value = '';
+    if ($('camFilterProduct')) $('camFilterProduct').value = '';
+    if ($('camFilterRole')) $('camFilterRole').value = '';
+    applyCamFilter();
   });
 
   $('backBtn').addEventListener('click', () => {
