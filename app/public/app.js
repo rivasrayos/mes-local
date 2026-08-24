@@ -17,7 +17,8 @@ const $ = (id) => document.getElementById(id);
  *  #/imla/line/L12         IMLA line
  *  #/eol                   EOL lines
  *  #/eol/line/L12          EOL line
- *  #/settings              admin settings
+ *  #/settings              admin tools hub
+ *  #/settings/cameras      camera registry tool
  */
 function getRoute() {
   let raw = (location.hash || '#/').replace(/^#/, '') || '/';
@@ -31,7 +32,9 @@ function getRoute() {
   if (m) return { product: 'eol', page: 'line', line: decodeURIComponent(m[1]) };
   if (/^\/eol\/?$/i.test(raw)) return { product: 'eol', page: 'home', line: '' };
 
-  if (/^\/settings\/?$/i.test(raw)) return { product: 'settings', page: 'home', line: '' };
+  m = raw.match(/^\/settings\/([^/]+)\/?$/i);
+  if (m) return { product: 'settings', page: 'tool', tool: decodeURIComponent(m[1]).toLowerCase(), line: '' };
+  if (/^\/settings\/?$/i.test(raw)) return { product: 'settings', page: 'home', tool: '', line: '' };
 
   m = raw.match(/^\/line\/([^/]+)\/?$/i);
   if (m) return { product: 'imla', page: 'line', line: decodeURIComponent(m[1]), legacy: true };
@@ -43,6 +46,7 @@ function goProductHome() { location.hash = '#/'; }
 function goImlaHome() { location.hash = '#/imla'; }
 function goEolHome() { location.hash = '#/eol'; }
 function goSettings() { location.hash = '#/settings'; }
+function goSettingsTool(tool) { location.hash = `#/settings/${encodeURIComponent(tool)}`; }
 function goImlaLine(line) { location.hash = `#/imla/line/${encodeURIComponent(line)}`; }
 function goEolLine(line) { location.hash = `#/eol/line/${encodeURIComponent(line)}`; }
 
@@ -69,6 +73,7 @@ function setAdminLoggedIn(on) {
 
 function renderSettingsView() {
   const loggedIn = isAdminLoggedIn();
+  const route = getRoute();
   $('settingsLoginPanel').classList.toggle('hidden', loggedIn);
   $('settingsAppPanel').classList.toggle('hidden', !loggedIn);
   $('settingsLogoutBtn').classList.toggle('hidden', !loggedIn);
@@ -77,7 +82,26 @@ function renderSettingsView() {
     $('settingsLoginError').textContent = '';
     return;
   }
-  loadCameraRegistry().catch(console.error);
+
+  const tool = route.page === 'tool' ? (route.tool || '') : '';
+  const onCameras = tool === 'cameras';
+  if (route.page === 'tool' && tool && !onCameras) {
+    goSettings();
+    return;
+  }
+  $('settingsHubPanel')?.classList.toggle('hidden', onCameras);
+  $('settingsToolCameras')?.classList.toggle('hidden', !onCameras);
+
+  const sub = document.querySelector('#view-settings .brand-block .sub');
+  if (sub) {
+    sub.textContent = onCameras
+      ? 'Cámaras Overview · registro por IP / serial / rol'
+      : 'Herramientas de configuración y diagnóstico';
+  }
+
+  if (onCameras) {
+    loadCameraRegistry().catch(console.error);
+  }
 }
 
 function syncCamRoleOptions() {
@@ -1302,9 +1326,14 @@ function wireUi() {
     card.addEventListener('click', () => { location.hash = card.dataset.go; });
   });
 
-  $('settingsBackBtn').addEventListener('click', () => goProductHome());
+  $('settingsBackBtn').addEventListener('click', () => {
+    const route = getRoute();
+    if (route.product === 'settings' && route.page === 'tool') goSettings();
+    else goProductHome();
+  });
   $('settingsLogoutBtn').addEventListener('click', () => {
     setAdminLoggedIn(false);
+    goSettings();
     renderSettingsView();
   });
   $('settingsLoginForm').addEventListener('submit', (e) => {
@@ -1322,6 +1351,14 @@ function wireUi() {
     err.textContent = 'Usuario o contraseña incorrectos.';
     err.classList.remove('hidden');
   });
+
+  document.querySelectorAll('[data-settings-tool]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tool = btn.getAttribute('data-settings-tool');
+      if (tool) goSettingsTool(tool);
+    });
+  });
+  $('settingsToolBackBtn')?.addEventListener('click', () => goSettings());
 
   syncCamRoleOptions();
   $('camProductSelect').addEventListener('change', syncCamRoleOptions);
