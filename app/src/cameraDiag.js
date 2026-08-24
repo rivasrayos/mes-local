@@ -410,12 +410,13 @@ async function applyNtpToRegistered({
 
 /** One-shot: set each camera clock to MES server time (microseconds).
  * OV80i refuses SetTime while NTP/auto-sync is enabled, so we:
- * 1) read NTP config  2) disable NTP  3) set time  4) restore NTP
+ * 1) disable NTP  2) set time  3) leave NTP off (so a bad NTP server cannot undo it)
+ * Use "Aplicar NTP" separately when the plant NTP server is known-good.
  */
 async function syncTimeToRegistered({
   lineNumber,
   product,
-  reenableNtp = true,
+  reenableNtp = false,
 } = {}) {
   const nowUs = Math.round(Date.now() * 1000);
   const items = await filterRegistered({ lineNumber, product });
@@ -430,23 +431,20 @@ async function syncTimeToRegistered({
     const servers = ntpBefore.ok && Array.isArray(ntpBefore.data?.servers)
       ? ntpBefore.data.servers.filter(Boolean)
       : [];
-    const wasEnabled = ntpBefore.ok ? !!ntpBefore.data?.enabled : true;
 
-    if (wasEnabled || ntpBefore.ok) {
-      const off = await fetchJson(reg.ip, '/edge/v2/device/ntp', {
-        method: 'POST',
-        timeoutMs: WRITE_MS,
-        body: { enabled: false, servers: servers.length ? servers : ['0.pool.ntp.org'] },
-      });
-      if (!off.ok) {
-        return {
-          ...base,
-          ok: false,
-          error: `No se pudo desactivar NTP: ${off.error || 'error'}`,
-        };
-      }
-      await new Promise((r) => setTimeout(r, 400));
+    const off = await fetchJson(reg.ip, '/edge/v2/device/ntp', {
+      method: 'POST',
+      timeoutMs: WRITE_MS,
+      body: { enabled: false, servers: servers.length ? servers : ['0.pool.ntp.org'] },
+    });
+    if (!off.ok) {
+      return {
+        ...base,
+        ok: false,
+        error: `No se pudo desactivar NTP: ${off.error || 'error'}`,
+      };
     }
+    await new Promise((r) => setTimeout(r, 500));
 
     const set = await fetchJson(reg.ip, '/edge/v2/device/time', {
       method: 'POST',
@@ -454,14 +452,6 @@ async function syncTimeToRegistered({
       body: { now_us: nowUs },
     });
     if (!set.ok) {
-      // best-effort re-enable if we disabled
-      if (wasEnabled && reenableNtp) {
-        await fetchJson(reg.ip, '/edge/v2/device/ntp', {
-          method: 'POST',
-          timeoutMs: WRITE_MS,
-          body: { enabled: true, servers },
-        });
-      }
       return {
         ...base,
         ok: false,
@@ -469,36 +459,30 @@ async function syncTimeToRegistered({
       };
     }
 
-    if (reenableNtp && wasEnabled) {
-      const on = await fetchJson(reg.ip, '/edge/v2/device/ntp', {
+    if (reenableNtp) {
+      await fetchJson(reg.ip, '/edge/v2/device/ntp', {
         method: 'POST',
         timeoutMs: WRITE_MS,
         body: { enabled: true, servers: servers.length ? servers : ['0.pool.ntp.org'] },
       });
-      if (!on.ok) {
-        return {
-          ...base,
-          ok: true,
-          warning: `Hora OK, pero NTP no se reactivó: ${on.error || 'error'}`,
-        };
-      }
     }
 
-    // verify
+    await new Promise((r) => setTimeout(r, 300));
     const after = await fetchJson(reg.ip, '/edge/v2/device/time', { timeoutMs: WRITE_MS });
     let skewSec = null;
     if (after.ok && after.data?.now_us != null) {
       skewSec = Math.round((Number(after.data.now_us) - Date.now() * 1000) / 1000);
     }
 
+    const skewBad = skewSec != null && Math.abs(skewSec) > 5;
     return {
       ...base,
-      ok: true,
+      ok: !skewBad,
       skewSec,
-      warning:
-        skewSec != null && Math.abs(skewSec) > 5
-          ? `Hora aplicada, skew residual ${skewSec}s (NTP de planta puede estar mal)`
-          : null,
+      error: skewBad ? `Skew residual ${skewSec}s tras setear` : null,
+      warning: reenableNtp
+        ? null
+        : 'Hora fijada · NTP quedó OFF (actívalo solo si el servidor NTP es bueno)',
     };
   });
 

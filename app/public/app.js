@@ -1552,7 +1552,7 @@ function wireUi() {
 
   $('ntpSyncTimeBtn')?.addEventListener('click', async () => {
     const msg = $('ntpMsg');
-    if (!confirm('¿Sincronizar la hora del MES en las cámaras del filtro?\n(Se desactiva NTP un momento, se setea la hora y se reactiva.)')) return;
+    if (!confirm('¿Sincronizar la hora del MES en las cámaras del filtro?\nNTP se apagará para que la hora quede fija.')) return;
     setCamMsg(msg, 'Sincronizando hora (puede tardar)…', '');
     try {
       const res = await fetch('/api/settings/camera-status/sync-time', {
