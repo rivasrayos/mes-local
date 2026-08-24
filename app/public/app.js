@@ -163,14 +163,18 @@ function renderNtpResults(data) {
     <table>
       <thead><tr><th>Línea</th><th>Rol</th><th>IP</th><th>Resultado</th></tr></thead>
       <tbody>
-        ${rows.map((r) => `
+        ${rows.map((r) => {
+          const detail = r.ok
+            ? (r.warning || (r.skewSec != null ? `OK (skew ${r.skewSec}s)` : 'OK'))
+            : (r.error || 'error');
+          return `
           <tr>
             <td>${esc(r.lineNumber || '—')}</td>
             <td>${esc(r.role || '—')}</td>
             <td>${esc(r.ip || '—')}</td>
-            <td class="${r.ok ? 'ok' : 'err'}">${r.ok ? 'OK' : esc(r.error || 'error')}</td>
-          </tr>
-        `).join('')}
+            <td class="${r.ok && !r.warning ? 'ok' : 'err'}">${esc(detail)}</td>
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>
   `;
@@ -1548,8 +1552,8 @@ function wireUi() {
 
   $('ntpSyncTimeBtn')?.addEventListener('click', async () => {
     const msg = $('ntpMsg');
-    if (!confirm('¿Poner la hora del MES en las cámaras del filtro?')) return;
-    setCamMsg(msg, 'Sincronizando hora…', '');
+    if (!confirm('¿Sincronizar la hora del MES en las cámaras del filtro?\n(Se desactiva NTP un momento, se setea la hora y se reactiva.)')) return;
+    setCamMsg(msg, 'Sincronizando hora (puede tardar)…', '');
     try {
       const res = await fetch('/api/settings/camera-status/sync-time', {
         method: 'POST',
@@ -1558,7 +1562,8 @@ function wireUi() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'No se pudo sincronizar');
-      setCamMsg(msg, `Hora sync: ${data.okCount}/${data.total} OK`, data.failCount ? 'err' : 'ok');
+      const kind = data.failCount ? 'err' : 'ok';
+      setCamMsg(msg, `Hora sync: ${data.okCount}/${data.total} OK` + (data.failCount ? ` · ${data.failCount} fallaron` : ''), kind);
       renderNtpResults(data);
     } catch (err) {
       setCamMsg(msg, err.message || String(err), 'err');

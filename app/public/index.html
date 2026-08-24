@@ -269,8 +269,8 @@
         <div class="settings-block">
           <h3>Servidor NTP</h3>
           <p class="settings-hint">
-            Usa la IP LAN de la PC del MES si ahí corre chrony/ntp (UDP 123), o un NTP de planta.
-            Ejemplo: 192.168.11.87
+            Guarda en las cámaras la IP del NTP de planta (UDP 123).
+            Si esa IP no tiene un servicio NTP real, la hora se volverá a desfasar.
           </p>
           <div class="settings-row wrap">
             <label class="field grow">
@@ -284,11 +284,11 @@
         <div class="settings-block">
           <h3>Sincronizar ahora</h3>
           <p class="settings-hint">
-            Ajuste único: copia la hora actual del servidor MES a las cámaras filtradas.
-            Conviene después tener NTP configurado para que no se vuelvan a desfasar.
+            Copia la hora del MES a cada cámara (apaga NTP un momento, setea hora y lo vuelve a encender).
+            Úsalo para alinear ya; el NTP de planta debe funcionar para mantenerla.
           </p>
           <div class="settings-row wrap">
-            <button id="ntpSyncTimeBtn" class="btn" type="button">Sincronizar hora ahora</button>
+            <button id="ntpSyncTimeBtn" class="btn btn-accent" type="button">Sincronizar hora ahora</button>
           </div>
           <p id="ntpMsg" class="settings-msg hidden" role="status"></p>
           <div id="ntpResultBox" class="ntp-result hidden"></div>
