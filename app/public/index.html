@@ -225,6 +225,24 @@
             <button id="diagRefreshBtn" class="btn btn-accent" type="button">Actualizar estado</button>
           </div>
           <p id="diagMeta" class="settings-hint"></p>
+
+          <div class="settings-block diag-ntp-block">
+            <h3>NTP / hora</h3>
+            <p class="settings-hint">
+              Las cámaras tienen NTP pero muchas sin servidor. Puedes apuntarlas a la PC del MES
+              (si corre un servicio NTP) o a cualquier NTP de planta, y/o sincronizar la hora ahora.
+            </p>
+            <div class="settings-row wrap">
+              <label class="field grow">
+                <span>Servidor NTP (IP de la PC MES u otro)</span>
+                <input id="diagNtpServer" type="text" placeholder="192.168.11.87" />
+              </label>
+              <button id="diagApplyNtpBtn" class="btn btn-accent" type="button">Aplicar NTP a filtradas</button>
+              <button id="diagSyncTimeBtn" class="btn" type="button">Sincronizar hora ahora</button>
+            </div>
+            <p id="diagNtpMsg" class="settings-msg hidden" role="status"></p>
+          </div>
+
           <div id="diagCards" class="diag-cards"></div>
         </div>
       </div>

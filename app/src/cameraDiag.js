@@ -2,14 +2,20 @@ const { normalizeIp, isValidIpOrHost, listCameras } = require('./cameras');
 
 const FETCH_MS = 4500;
 
-async function fetchJson(ip, path) {
+async function fetchJson(ip, path, { method = 'GET', body = null } = {}) {
   const url = `http://${ip}${path}`;
   const started = Date.now();
   try {
-    const res = await fetch(url, {
+    const opts = {
+      method,
       headers: { Accept: 'application/json, text/plain, */*' },
       signal: AbortSignal.timeout(FETCH_MS),
-    });
+    };
+    if (body != null) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(url, opts);
     const text = await res.text();
     let data = null;
     try {
@@ -120,6 +126,7 @@ async function probeCamera(ipRaw, registry = null) {
     deploy,
     envVars,
     industrial,
+    ntp,
   ] = await Promise.all([
     fetchJson(ip, '/edge/v2/healthcheck'),
     fetchJson(ip, '/edge/v2/device/serial_number'),
@@ -135,6 +142,7 @@ async function probeCamera(ipRaw, registry = null) {
     fetchJson(ip, '/edge/recipe/deployment-status'),
     fetchJson(ip, '/edge/environmental_variables'),
     fetchJson(ip, '/edge/industrial_ethernet/protocol'),
+    fetchJson(ip, '/edge/v2/device/ntp'),
   ]);
 
   const online = health.ok || serial.ok || version.ok || recipe.ok;
@@ -221,6 +229,16 @@ async function probeCamera(ipRaw, registry = null) {
   const industrialProtocol =
     (industrial.ok && industrial.data && industrial.data.active_protocol) || '';
 
+  const ntpEnabled = ntp.ok ? !!(ntp.data && ntp.data.enabled) : null;
+  const ntpServers = ntp.ok && Array.isArray(ntp.data?.servers)
+    ? ntp.data.servers.filter(Boolean)
+    : [];
+  if (ntpEnabled === true && !ntpServers.length) {
+    warnings.push('NTP activo pero sin servidor configurado');
+  } else if (ntpEnabled === false) {
+    warnings.push('NTP desactivado');
+  }
+
   if (!online) warnings.push('Cámara no responde');
 
   return {
@@ -261,6 +279,10 @@ async function probeCamera(ipRaw, registry = null) {
     recipe: activeRecipe,
     deployment,
     industrialProtocol,
+    ntp: {
+      enabled: ntpEnabled,
+      servers: ntpServers,
+    },
     warnings,
     errors: {
       health: health.error,
@@ -330,7 +352,90 @@ async function probeRegisteredCameras({ lineNumber, product } = {}) {
   };
 }
 
+async function filterRegistered({ lineNumber, product } = {}) {
+  let items = await listCameras();
+  const line = String(lineNumber || '').trim().toUpperCase();
+  const prod = String(product || '').trim().toLowerCase();
+  if (line) {
+    items = items.filter((c) => String(c.lineNumber || '').toUpperCase() === line);
+  }
+  if (prod) {
+    items = items.filter((c) => String(c.product || '').toLowerCase() === prod);
+  }
+  return items;
+}
+
+/** Push NTP config to registered cameras (read/write on device). */
+async function applyNtpToRegistered({
+  ntpServer,
+  enabled = true,
+  lineNumber,
+  product,
+} = {}) {
+  const server = normalizeIp(ntpServer);
+  if (!isValidIpOrHost(server)) {
+    const err = new Error('Servidor NTP inválido (usa IP o hostname)');
+    err.status = 400;
+    throw err;
+  }
+  const items = await filterRegistered({ lineNumber, product });
+  const results = await mapPool(items, 4, async (reg) => {
+    const res = await fetchJson(reg.ip, '/edge/v2/device/ntp', {
+      method: 'POST',
+      body: {
+        enabled: enabled !== false,
+        servers: [server],
+      },
+    });
+    return {
+      ip: reg.ip,
+      lineNumber: reg.lineNumber,
+      role: reg.role,
+      ok: res.ok,
+      error: res.error,
+      detail: typeof res.data === 'string' ? res.data : (res.ok ? 'ok' : ''),
+    };
+  });
+  return {
+    ntpServer: server,
+    enabled: enabled !== false,
+    total: results.length,
+    okCount: results.filter((r) => r.ok).length,
+    failCount: results.filter((r) => !r.ok).length,
+    results,
+  };
+}
+
+/** One-shot: set each camera clock to MES server time (microseconds). */
+async function syncTimeToRegistered({ lineNumber, product } = {}) {
+  const nowUs = Math.round(Date.now() * 1000);
+  const items = await filterRegistered({ lineNumber, product });
+  const results = await mapPool(items, 4, async (reg) => {
+    const res = await fetchJson(reg.ip, '/edge/v2/device/time', {
+      method: 'POST',
+      body: { now_us: nowUs },
+    });
+    return {
+      ip: reg.ip,
+      lineNumber: reg.lineNumber,
+      role: reg.role,
+      ok: res.ok,
+      error: res.error,
+    };
+  });
+  return {
+    mesTimeUs: nowUs,
+    mesTimeIso: new Date().toISOString(),
+    total: results.length,
+    okCount: results.filter((r) => r.ok).length,
+    failCount: results.filter((r) => !r.ok).length,
+    results,
+  };
+}
+
 module.exports = {
   probeCamera,
   probeRegisteredCameras,
+  applyNtpToRegistered,
+  syncTimeToRegistered,
 };

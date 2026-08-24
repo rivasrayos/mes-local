@@ -166,6 +166,13 @@ function renderDiagCard(cam) {
         <div><dt>Skew reloj</dt><dd>${esc(skew)}</dd></div>
         <div><dt>Industrial</dt><dd>${esc(cam.industrialProtocol || '—')}</dd></div>
         <div><dt>LINE_CODE</dt><dd>${esc(cam.env?.lineCode || '—')}</dd></div>
+        <div><dt>NTP</dt><dd>${
+          cam.ntp?.enabled == null
+            ? '—'
+            : (cam.ntp.enabled
+              ? `ON · ${(cam.ntp.servers || []).join(', ') || 'sin servidor'}`
+              : 'OFF')
+        }</dd></div>
       </dl>
       ${warn ? `<ul class="diag-warn">${warn}</ul>` : ''}
     </article>
@@ -1458,6 +1465,56 @@ function wireUi() {
   $('diagRefreshBtn')?.addEventListener('click', () => loadCameraStatusUi().catch(console.error));
   $('diagFilterLine')?.addEventListener('change', () => loadCameraStatusUi().catch(console.error));
   $('diagFilterProduct')?.addEventListener('change', () => loadCameraStatusUi().catch(console.error));
+
+  async function diagFilterBody() {
+    return {
+      lineNumber: ($('diagFilterLine')?.value || '').trim(),
+      product: ($('diagFilterProduct')?.value || '').trim(),
+    };
+  }
+
+  $('diagApplyNtpBtn')?.addEventListener('click', async () => {
+    const msg = $('diagNtpMsg');
+    const ntpServer = ($('diagNtpServer')?.value || '').trim();
+    if (!ntpServer) {
+      setCamMsg(msg, 'Escribe la IP del servidor NTP', 'err');
+      return;
+    }
+    if (!confirm(`¿Aplicar NTP ${ntpServer} a las cámaras del filtro actual?`)) return;
+    setCamMsg(msg, 'Aplicando NTP…', '');
+    try {
+      const res = await fetch('/api/settings/camera-status/ntp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ntpServer, ...(await diagFilterBody()) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo aplicar NTP');
+      setCamMsg(msg, `NTP aplicado: ${data.okCount}/${data.total} OK`, data.failCount ? 'err' : 'ok');
+      await loadCameraStatusUi();
+    } catch (err) {
+      setCamMsg(msg, err.message || String(err), 'err');
+    }
+  });
+
+  $('diagSyncTimeBtn')?.addEventListener('click', async () => {
+    const msg = $('diagNtpMsg');
+    if (!confirm('¿Poner la hora del MES en las cámaras del filtro? (ajuste único; conviene NTP después)')) return;
+    setCamMsg(msg, 'Sincronizando hora…', '');
+    try {
+      const res = await fetch('/api/settings/camera-status/sync-time', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(await diagFilterBody()),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo sincronizar');
+      setCamMsg(msg, `Hora sync: ${data.okCount}/${data.total} OK`, data.failCount ? 'err' : 'ok');
+      await loadCameraStatusUi();
+    } catch (err) {
+      setCamMsg(msg, err.message || String(err), 'err');
+    }
+  });
 
   syncCamRoleOptions();
   $('camProductSelect').addEventListener('change', syncCamRoleOptions);

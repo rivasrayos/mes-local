@@ -25,7 +25,12 @@ const {
   upsertCamera,
   deleteCamera,
 } = require('./cameras');
-const { probeCamera, probeRegisteredCameras } = require('./cameraDiag');
+const {
+  probeCamera,
+  probeRegisteredCameras,
+  applyNtpToRegistered,
+  syncTimeToRegistered,
+} = require('./cameraDiag');
 
 const router = express.Router();
 
@@ -256,6 +261,32 @@ router.post('/settings/camera-status/probe', async (req, res, next) => {
   try {
     const item = await probeCamera(req.body?.ip);
     res.json({ ok: true, item });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings/camera-status/ntp', async (req, res, next) => {
+  try {
+    const result = await applyNtpToRegistered({
+      ntpServer: req.body?.ntpServer || req.body?.server,
+      enabled: req.body?.enabled !== false,
+      lineNumber: req.body?.lineNumber || '',
+      product: req.body?.product || '',
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings/camera-status/sync-time', async (req, res, next) => {
+  try {
+    const result = await syncTimeToRegistered({
+      lineNumber: req.body?.lineNumber || '',
+      product: req.body?.product || '',
+    });
+    res.json({ ok: true, ...result });
   } catch (err) {
     next(err);
   }
