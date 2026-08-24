@@ -175,17 +175,89 @@ async function upsertCamera({
   }
   const pr = validateRole(product, role);
 
+  const byIp = await query(`SELECT * FROM camera_registry WHERE ip = $1`, [host]);
+  const byCam = await query(`SELECT * FROM camera_registry WHERE camera_id = $1`, [camId]);
+  const bySlot = await query(
+    `SELECT * FROM camera_registry
+     WHERE line_number = $1 AND product = $2 AND role = $3`,
+    [line, pr.product, pr.role]
+  );
+
+  const camRow = byIp.rows[0] || byCam.rows[0] || null;
+  const slotRow = bySlot.rows[0] || null;
+  let warning = null;
+
+  // Same physical camera already registered under another line/role → move it
+  if (camRow) {
+    const otherIds = new Set();
+    if (byIp.rows[0]) otherIds.add(byIp.rows[0].id);
+    if (byCam.rows[0]) otherIds.add(byCam.rows[0].id);
+    // If ip and camera_id pointed at different rows, drop the duplicate
+    for (const id of otherIds) {
+      if (id !== camRow.id) {
+        await query(`DELETE FROM camera_registry WHERE id = $1`, [id]);
+      }
+    }
+    if (
+      camRow.line_number !== line ||
+      camRow.product !== pr.product ||
+      camRow.role !== pr.role
+    ) {
+      warning =
+        `Cámara movida de ${camRow.line_number} ${String(camRow.product).toUpperCase()} ${camRow.role}` +
+        ` → ${line} ${pr.product.toUpperCase()} ${pr.role}. ` +
+        `Una IP/serial solo puede estar en una línea a la vez.`;
+    }
+    // Free target slot if occupied by a different camera
+    if (slotRow && slotRow.id !== camRow.id) {
+      await query(`DELETE FROM camera_registry WHERE id = $1`, [slotRow.id]);
+      warning = (warning ? `${warning} ` : '') +
+        `Se reemplazó la cámara anterior en ${line} ${pr.role}.`;
+    }
+    const res = await query(
+      `UPDATE camera_registry SET
+         ip = $1,
+         serial_number = $2,
+         camera_id = $3,
+         line_number = $4,
+         product = $5,
+         role = $6,
+         updated_at = NOW()
+       WHERE id = $7
+       RETURNING *`,
+      [host, serial, camId, line, pr.product, pr.role, camRow.id]
+    );
+    await refreshCameraMapCache();
+    const item = mapRow(res.rows[0]);
+    if (warning) item.warning = warning;
+    return item;
+  }
+
+  // Slot already taken by another camera → replace that slot
+  if (slotRow) {
+    warning =
+      `Se reemplazó la cámara anterior en ${line} ${pr.product.toUpperCase()} ${pr.role}` +
+      ` (${slotRow.ip}).`;
+    const res = await query(
+      `UPDATE camera_registry SET
+         ip = $1,
+         serial_number = $2,
+         camera_id = $3,
+         updated_at = NOW()
+       WHERE id = $4
+       RETURNING *`,
+      [host, serial, camId, slotRow.id]
+    );
+    await refreshCameraMapCache();
+    const item = mapRow(res.rows[0]);
+    item.warning = warning;
+    return item;
+  }
+
   const res = await query(
     `INSERT INTO camera_registry (
        ip, serial_number, camera_id, line_number, product, role, updated_at
      ) VALUES ($1,$2,$3,$4,$5,$6, NOW())
-     ON CONFLICT (ip) DO UPDATE SET
-       serial_number = EXCLUDED.serial_number,
-       camera_id = EXCLUDED.camera_id,
-       line_number = EXCLUDED.line_number,
-       product = EXCLUDED.product,
-       role = EXCLUDED.role,
-       updated_at = NOW()
      RETURNING *`,
     [host, serial, camId, line, pr.product, pr.role]
   );

@@ -142,7 +142,12 @@ async function saveCameraUi() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
-    setCamMsg(msg, `Guardada: ${body.lineNumber} · ${body.product.toUpperCase()} ${body.role}`, 'ok');
+    const warn = data.item?.warning;
+    if (warn) {
+      setCamMsg(msg, warn, 'err');
+    } else {
+      setCamMsg(msg, `Guardada: ${body.lineNumber} · ${body.role}`, 'ok');
+    }
     await loadCameraRegistry();
   } catch (err) {
     setCamMsg(msg, err.message || String(err), 'err');

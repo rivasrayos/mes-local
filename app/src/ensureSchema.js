@@ -111,7 +111,15 @@ async function ensureSchema() {
     )
   `);
   await query(`CREATE INDEX IF NOT EXISTS idx_camera_registry_line ON camera_registry (line_number)`);
-  await query(`CREATE INDEX IF NOT EXISTS idx_camera_registry_camera ON camera_registry (camera_id)`);
+  // One physical camera → one assignment
+  await query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_camera_registry_camera_uid ON camera_registry (camera_id)`
+  );
+  // One slot per line (e.g. L11 EOL1 and L12 EOL1 can both exist)
+  await query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_camera_registry_slot
+     ON camera_registry (line_number, product, role)`
+  );
 
   // Backfill view labels from known cameraId → EOL1..EOL5 map (+ registry)
   const { getMergedCameraMap, refreshCameraMapCache } = require('./cameras');
