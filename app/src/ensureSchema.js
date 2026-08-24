@@ -122,23 +122,30 @@ async function ensureSchema() {
   );
 
   // Backfill view labels from known cameraId → EOL1..EOL5 map (+ registry)
-  const { getMergedCameraMap, refreshCameraMapCache } = require('./cameras');
+  const { getMergedCameraMap, refreshCameraMapCache, cameraKeyVariants } = require('./cameras');
   await refreshCameraMapCache().catch(() => {});
   const eolCameraMap = getMergedCameraMap();
+  const seen = new Set();
   for (const [key, label] of Object.entries(eolCameraMap || {})) {
-    if (!key || !label || !key.startsWith('ov80i')) continue;
-    await query(
-      `UPDATE eol_records
-       SET view_name = $1
-       WHERE camera_id = $2
-         AND (
-           view_name IS NULL
-           OR view_name = ''
-           OR view_name = camera_id
-           OR view_name ~* '^ov80i-'
-         )`,
-      [label, key]
-    ).catch(() => {});
+    if (!key || !label || !/^EOL[1-5]$/i.test(label)) continue;
+    for (const variant of cameraKeyVariants(key)) {
+      if (!variant || seen.has(`${variant}|${label}`)) continue;
+      // Only match camera-like keys, not bare IPs alone for SQL (IPs handled via host in resolve)
+      if (!/ov80i-|dvboi-|gsac/i.test(variant)) continue;
+      seen.add(`${variant}|${label}`);
+      await query(
+        `UPDATE eol_records
+         SET view_name = $1
+         WHERE lower(camera_id) = lower($2)
+           AND (
+             view_name IS NULL
+             OR view_name = ''
+             OR view_name = camera_id
+             OR view_name ~* '^(ov80i-|dvboi-)'
+           )`,
+        [String(label).toUpperCase(), variant]
+      ).catch(() => {});
+    }
   }
 }
 

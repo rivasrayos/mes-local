@@ -9,6 +9,7 @@ const {
   weldingFromCables,
   byLineFromCables,
 } = require('./legs');
+const { listCamerasByLine } = require('./cameras');
 
 const PARAM_MAP = {
   Weld_Left_Top_Gap: 'weld_left_top_gap',
@@ -292,6 +293,7 @@ async function getDashboard(q = {}) {
     weldingOnFailBot: weldingFromCables(cables, 'bot'),
     byLine: byLineFromCables(cables),
     parameters: paramSeries,
+    registeredCameras: listCamerasByLine(q.lineNumber, 'imla'),
   };
 }
 

@@ -1,6 +1,13 @@
 const { query, withTransaction } = require('./db');
 const { formatInTz, formatWallClock } = require('./time');
-const { getMergedCameraMap } = require('./cameras');
+const {
+  getMergedCameraMap,
+  getEolColumnLabels,
+  resolveStationRole,
+  isStationLabel,
+  lookupCamera,
+  listCamerasByLine,
+} = require('./cameras');
 
 const DEFAULT_LEG_MAPPING = '1a2a3a4a1b2b3b4b';
 
@@ -9,16 +16,25 @@ function hostFromUrl(url) {
   return m ? m[1] : '';
 }
 
-/** Prefer payload view/cameraName; else map cameraId / image host → EOL1..EOL5 */
-function resolveCameraView(rec = {}) {
+/**
+ * Prefer Settings registry / static map → EOL1..EOL5.
+ * Explicit EOL* from payload kept; bare serials are never stored as view_name.
+ */
+function resolveCameraView(rec = {}, lineNumber = '') {
+  const cameraId = String(rec.cameraId || '').trim();
+  const host = hostFromUrl(rec.imageUrl) || hostFromUrl(rec.markedImageUrl);
+  const opts = { product: 'eol', lineNumber: lineNumber || rec.lineNumber || '' };
+
+  const fromRegistry =
+    resolveStationRole(cameraId, opts)
+    || resolveStationRole(host, opts);
+  if (fromRegistry) return fromRegistry;
+
   const explicit = rec.view || rec.cameraName || rec.camName || rec.cam;
-  if (explicit && String(explicit).trim()) return String(explicit).trim();
+  if (explicit && isStationLabel(explicit)) return String(explicit).trim().toUpperCase();
 
   const map = getMergedCameraMap();
-  const cameraId = String(rec.cameraId || '').trim();
   if (cameraId && map[cameraId]) return map[cameraId];
-
-  const host = hostFromUrl(rec.imageUrl) || hostFromUrl(rec.markedImageUrl);
   if (host && map[host]) return map[host];
 
   return '';
@@ -28,75 +44,80 @@ function isFail(value) {
   return String(value || '').toLowerCase() === 'fail';
 }
 
-function resolveViewLabel(viewName, cameraId, imageUrl) {
-  const map = getMergedCameraMap();
+function resolveViewLabel(viewName, cameraId, imageUrl, lineNumber = '') {
+  const opts = { product: 'eol', lineNumber };
   const id = String(cameraId || '').trim();
-  if (id && map[id]) return map[id];
-
   const host = hostFromUrl(imageUrl);
+
+  const fromRegistry =
+    resolveStationRole(id, opts)
+    || resolveStationRole(host, opts)
+    || resolveStationRole(viewName, opts);
+  if (fromRegistry) return fromRegistry;
+
+  const map = getMergedCameraMap();
+  if (id && map[id]) return map[id];
   if (host && map[host]) return map[host];
 
   if (viewName && String(viewName).trim()) {
     const v = String(viewName).trim();
     if (map[v]) return map[v];
-    if (/^EOL\d+/i.test(v)) return v;
+    if (isStationLabel(v)) return v.toUpperCase();
   }
-  return id || '';
+  // Do not expose bare serials as column keys
+  return '';
 }
 
-/** Prefer map / EOL* labels; never leave bare camera serials when a free EOLn exists */
-function buildCameraLabelResolver(cameraRows = []) {
+/** Prefer map / EOL* labels for dashboard camera cards */
+function buildCameraLabelResolver(cameraRows = [], lineNumber = '') {
   const map = getMergedCameraMap();
   const known = new Map();
-  const ids = [];
 
   for (const row of cameraRows) {
     const id = String(row.camera_id || '').trim();
-    if (id && !ids.includes(id)) ids.push(id);
+    if (!id) continue;
     const host = hostFromUrl(row.sample_image || row.image_url || '');
-    let label = (id && map[id])
+    const label =
+      resolveStationRole(id, { product: 'eol', lineNumber })
+      || resolveStationRole(host, { product: 'eol', lineNumber })
+      || (id && map[id])
       || (host && map[host])
-      || (row.eol_view && /^EOL\d+/i.test(String(row.eol_view).trim()) ? String(row.eol_view).trim() : '')
-      || (row.camera_key && /^EOL\d+/i.test(String(row.camera_key).trim()) ? String(row.camera_key).trim() : '');
-    if (id && label && /^EOL\d+/i.test(label)) known.set(id, label);
+      || (row.eol_view && isStationLabel(row.eol_view) ? String(row.eol_view).trim().toUpperCase() : '')
+      || (row.camera_key && isStationLabel(row.camera_key) ? String(row.camera_key).trim().toUpperCase() : '');
+    if (label && isStationLabel(label)) known.set(id, label.toUpperCase());
   }
-
-  const used = new Set([...known.values()].map((v) => v.toUpperCase()));
-  const free = [];
-  for (let n = 1; n <= Math.max(5, ids.length + 2); n += 1) {
-    const lab = `EOL${n}`;
-    if (!used.has(lab)) free.push(lab);
-  }
-  const unmapped = ids.filter((id) => !known.has(id)).sort((a, b) => a.localeCompare(b));
-  unmapped.forEach((id, i) => {
-    known.set(id, free[i] || `EOL${i + 1}`);
-  });
 
   return (cameraId, fallbackKey) => {
     const id = String(cameraId || '').trim();
     if (id && known.has(id)) return known.get(id);
+    const role = resolveStationRole(id, { product: 'eol', lineNumber });
+    if (role) return role;
     if (id && map[id]) return map[id];
-    if (fallbackKey && /^EOL\d+/i.test(String(fallbackKey))) return String(fallbackKey);
-    return fallbackKey || id || '(unknown)';
+    if (fallbackKey && isStationLabel(fallbackKey)) return String(fallbackKey).toUpperCase();
+    const entry = lookupCamera(id, { product: 'eol', lineNumber });
+    if (entry?.role) return entry.role;
+    return isStationLabel(fallbackKey) ? String(fallbackKey).toUpperCase() : (fallbackKey || id || '(unknown)');
   };
 }
 
 function mapCable(row) {
   if (!row) return null;
+  const lineNumber = row.line_number || '';
   const failCamsRaw = Array.isArray(row.fail_cameras) ? row.fail_cameras : [];
   const failCameras = [...new Set(
     failCamsRaw
       .map((f) => {
-        if (!f || typeof f !== 'object') return resolveViewLabel(f, '', '');
-        return resolveViewLabel(f.view_name, f.camera_id, f.image_url);
+        if (!f || typeof f !== 'object') return resolveViewLabel(f, '', '', lineNumber);
+        return resolveViewLabel(f.view_name, f.camera_id, f.image_url, lineNumber);
       })
-      .filter(Boolean)
+      .filter((label) => label && isStationLabel(label))
   )].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
 
   const byCamRaw = Array.isArray(row.captures_by_camera) ? row.captures_by_camera : [];
   const capturesByCamera = {};
   for (const item of byCamRaw) {
-    const label = resolveViewLabel(item.view_name, item.camera_id, item.image_url) || '—';
+    const label = resolveViewLabel(item.view_name, item.camera_id, item.image_url, lineNumber);
+    if (!label || !isStationLabel(label)) continue;
     if (!capturesByCamera[label]) capturesByCamera[label] = [];
     capturesByCamera[label].push({
       captureId: item.capture_id != null ? String(item.capture_id) : '',
@@ -114,7 +135,7 @@ function mapCable(row) {
     id: row.id,
     cycleId: row.cycle_id,
     sn: row.sn,
-    lineNumber: row.line_number,
+    lineNumber,
     stationName: row.station_name,
     stageName: row.stage_name || '',
     positions: row.positions || [],
@@ -126,9 +147,7 @@ function mapCable(row) {
         .filter(Boolean)
     )],
     capturesByCamera,
-    cameraViews: Object.keys(capturesByCamera).sort((a, b) =>
-      String(a).localeCompare(String(b), undefined, { numeric: true })
-    ),
+    cameraViews: getEolColumnLabels(lineNumber),
     passFail: row.pass_fail,
     defectType: row.defect_type || '',
     cameraCount: row.camera_count || 0,
@@ -152,7 +171,7 @@ function mapRecord(row) {
     stationName: row.station_name || '',
     position: row.position,
     cameraId: row.camera_id,
-    view: resolveViewLabel(row.view_name, row.camera_id, row.image_url),
+    view: resolveViewLabel(row.view_name, row.camera_id, row.image_url, row.line_number || ''),
     passFail: row.pass_fail,
     defects: row.defects || [],
     defectType: Array.isArray(row.defects) ? row.defects.join(', ') : (row.defect_type || ''),
@@ -372,7 +391,7 @@ async function insertCycleWithRecords(client, {
           sn,
           rec.position != null ? Number(rec.position) : null,
           rec.cameraId || '',
-          resolveCameraView(rec),
+          resolveCameraView(rec, lineNumber),
           isFail(rec.passFail) ? 'Fail' : 'Pass',
           JSON.stringify(Array.isArray(rec.defects) ? rec.defects : []),
           captureId,
@@ -540,14 +559,15 @@ async function listEol(q = {}) {
   );
 
   const items = listRes.rows.map(mapCable);
-  const cameraViews = [...new Set(items.flatMap((it) => it.cameraViews || []))]
-    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+  const cameraViews = getEolColumnLabels(q.lineNumber);
+  const registeredCameras = listCamerasByLine(q.lineNumber, 'eol');
 
   return {
     total: countRes.rows[0].total,
     limit,
     offset,
     cameraViews,
+    registeredCameras,
     items,
   };
 }
@@ -694,7 +714,7 @@ async function getEolDashboard(q = {}) {
     params
   );
 
-  const resolveCamLabel = buildCameraLabelResolver(camRes.rows);
+  const resolveCamLabel = buildCameraLabelResolver(camRes.rows, q.lineNumber || '');
 
   const packCam = (row) => {
     const t = row.total || 0;
@@ -716,6 +736,7 @@ async function getEolDashboard(q = {}) {
   const byCameraMap = new Map();
   for (const row of camRes.rows) {
     const packed = packCam(row);
+    if (!packed.view || !isStationLabel(packed.view)) continue;
     const prev = byCameraMap.get(packed.view);
     if (!prev) {
       byCameraMap.set(packed.view, packed);
@@ -735,6 +756,7 @@ async function getEolDashboard(q = {}) {
   const trendByCamera = {};
   for (const row of camTrendRes.rows) {
     const label = resolveCamLabel(row.camera_id, null);
+    if (!label || !isStationLabel(label)) continue;
     if (!trendByCamera[label]) trendByCamera[label] = [];
     trendByCamera[label].push({
       bucket: row.bucket,
@@ -747,6 +769,7 @@ async function getEolDashboard(q = {}) {
   const defectsByCamera = {};
   for (const row of camDefectRes.rows) {
     const label = resolveCamLabel(row.camera_id, null);
+    if (!label || !isStationLabel(label)) continue;
     if (!defectsByCamera[label]) defectsByCamera[label] = [];
     if (defectsByCamera[label].length >= 15) continue;
     defectsByCamera[label].push({ defect: row.defect, count: row.count });
@@ -770,6 +793,7 @@ async function getEolDashboard(q = {}) {
       unit: 'cable',
     },
     byCamera,
+    registeredCameras: listCamerasByLine(q.lineNumber, 'eol'),
     trendByCamera,
     defectsByCamera,
     trend: trendRes.rows.map((r) => ({

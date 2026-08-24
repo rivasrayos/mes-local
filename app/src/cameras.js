@@ -1,6 +1,9 @@
 const { query } = require('./db');
 const config = require('./config');
 
+/** @type {object[]} */
+let registryEntries = [];
+/** @type {Record<string, string>} cameraKey → EOL role (flat map for ingest/list) */
 let registryCache = {};
 
 function normalizeIp(raw) {
@@ -15,11 +18,39 @@ function isValidIpOrHost(ip) {
   return true;
 }
 
+/** Canonical camera id: ov80i-<serial> (lowercase). Accepts DVBOI- / bare serial. */
 function toCameraId(serialNumber) {
-  const s = String(serialNumber || '').trim().toLowerCase();
+  let s = String(serialNumber || '').trim().toLowerCase();
   if (!s) return '';
+  s = s.replace(/^dvboi-/, 'ov80i-');
   if (s.startsWith('ov80i-')) return s;
   return `ov80i-${s}`;
+}
+
+/** All lookup keys for a camera id / serial / ip */
+function cameraKeyVariants(raw) {
+  const keys = new Set();
+  const add = (v) => {
+    const t = String(v || '').trim();
+    if (!t) return;
+    keys.add(t);
+    keys.add(t.toLowerCase());
+    keys.add(t.toUpperCase());
+  };
+  add(raw);
+  const lower = String(raw || '').trim().toLowerCase();
+  if (!lower) return [...keys];
+
+  const canon = toCameraId(lower);
+  if (canon) {
+    add(canon);
+    const serial = canon.replace(/^ov80i-/, '');
+    add(serial);
+    add(`dvboi-${serial}`);
+    add(`DVBOI-${serial.toUpperCase()}`);
+    add(`ov80i-${serial}`);
+  }
+  return [...keys];
 }
 
 function mapRow(row) {
@@ -37,27 +68,121 @@ function mapRow(row) {
   };
 }
 
-async function refreshCameraMapCache() {
-  const res = await query(
-    `SELECT ip, camera_id, role, product
-     FROM camera_registry
-     ORDER BY updated_at DESC`
-  ).catch(() => ({ rows: [] }));
+function indexRegistry(rows = []) {
+  registryEntries = rows.map(mapRow).filter(Boolean);
   const map = {};
-  for (const row of res.rows) {
-    if (row.product !== 'eol') continue;
-    if (row.camera_id) map[row.camera_id] = row.role;
-    if (row.ip) map[row.ip] = row.role;
+  for (const entry of registryEntries) {
+    if (entry.product !== 'eol') continue;
+    for (const key of cameraKeyVariants(entry.cameraId)) {
+      map[key] = entry.role;
+    }
+    for (const key of cameraKeyVariants(entry.serialNumber)) {
+      map[key] = entry.role;
+    }
+    if (entry.ip) {
+      map[entry.ip] = entry.role;
+      map[String(entry.ip).toLowerCase()] = entry.role;
+    }
   }
   registryCache = map;
   return map;
 }
 
+async function refreshCameraMapCache() {
+  const res = await query(
+    `SELECT * FROM camera_registry
+     ORDER BY line_number, product, role, ip`
+  ).catch(() => ({ rows: [] }));
+  return indexRegistry(res.rows);
+}
+
 function getMergedCameraMap() {
-  return {
-    ...config.eolCameraMap,
-    ...registryCache,
-  };
+  const merged = { ...config.eolCameraMap };
+  // Expand static config keys with variants so DVBOI- matches ov80i-
+  for (const [key, role] of Object.entries(config.eolCameraMap || {})) {
+    for (const v of cameraKeyVariants(key)) {
+      if (merged[v] == null) merged[v] = role;
+    }
+  }
+  return { ...merged, ...registryCache };
+}
+
+/**
+ * Resolve registry entry by camera id / serial / IP.
+ * Prefers matching product + line when provided.
+ */
+function lookupCamera(rawKey, { product, lineNumber } = {}) {
+  const variants = new Set(cameraKeyVariants(rawKey));
+  if (!variants.size) return null;
+
+  const matches = registryEntries.filter((e) => {
+    const keys = new Set([
+      ...cameraKeyVariants(e.cameraId),
+      ...cameraKeyVariants(e.serialNumber),
+      e.ip,
+      String(e.ip || '').toLowerCase(),
+    ]);
+    for (const v of variants) {
+      if (keys.has(v)) return true;
+    }
+    return false;
+  });
+  if (!matches.length) return null;
+
+  const prod = product ? String(product).toLowerCase() : '';
+  const line = lineNumber ? String(lineNumber).trim() : '';
+
+  if (prod && line) {
+    const hit = matches.find(
+      (e) => e.product === prod && String(e.lineNumber).toUpperCase() === line.toUpperCase()
+    );
+    if (hit) return hit;
+  }
+  if (prod) {
+    const hit = matches.find((e) => e.product === prod);
+    if (hit) return hit;
+  }
+  if (line) {
+    const hit = matches.find(
+      (e) => String(e.lineNumber).toUpperCase() === line.toUpperCase()
+    );
+    if (hit) return hit;
+  }
+  return matches[0];
+}
+
+/** Station label (EOL1… / TOP / BOT) from registry or static EOL map */
+function resolveStationRole(rawKey, opts = {}) {
+  const entry = lookupCamera(rawKey, opts);
+  if (entry?.role) return entry.role;
+
+  if (!opts.product || opts.product === 'eol') {
+    const map = getMergedCameraMap();
+    for (const v of cameraKeyVariants(rawKey)) {
+      if (map[v]) return map[v];
+    }
+  }
+  return '';
+}
+
+function listCamerasByLine(lineNumber, product) {
+  const line = String(lineNumber || '').trim().toUpperCase();
+  const prod = product ? String(product).toLowerCase() : '';
+  return registryEntries.filter((e) => {
+    if (line && String(e.lineNumber).toUpperCase() !== line) return false;
+    if (prod && e.product !== prod) return false;
+    return true;
+  });
+}
+
+/** Fixed EOL column headers for the table (never raw serials) */
+function getEolColumnLabels(_lineNumber) {
+  return ['EOL1', 'EOL2', 'EOL3', 'EOL4', 'EOL5'];
+}
+
+function isStationLabel(label) {
+  const v = String(label || '').trim().toUpperCase();
+  return /^EOL[1-5]$/.test(v) || v === 'TOP' || v === 'BOT';
 }
 
 /** Discover Overview camera serial by IP via postgrest device_info */
@@ -119,6 +244,7 @@ async function listCameras() {
     `SELECT * FROM camera_registry
      ORDER BY line_number, product, role, ip`
   );
+  indexRegistry(res.rows);
   return res.rows.map(mapRow);
 }
 
@@ -187,12 +313,10 @@ async function upsertCamera({
   const slotRow = bySlot.rows[0] || null;
   let warning = null;
 
-  // Same physical camera already registered under another line/role → move it
   if (camRow) {
     const otherIds = new Set();
     if (byIp.rows[0]) otherIds.add(byIp.rows[0].id);
     if (byCam.rows[0]) otherIds.add(byCam.rows[0].id);
-    // If ip and camera_id pointed at different rows, drop the duplicate
     for (const id of otherIds) {
       if (id !== camRow.id) {
         await query(`DELETE FROM camera_registry WHERE id = $1`, [id]);
@@ -208,7 +332,6 @@ async function upsertCamera({
         ` → ${line} ${pr.product.toUpperCase()} ${pr.role}. ` +
         `Una IP/serial solo puede estar en una línea a la vez.`;
     }
-    // Free target slot if occupied by a different camera
     if (slotRow && slotRow.id !== camRow.id) {
       await query(`DELETE FROM camera_registry WHERE id = $1`, [slotRow.id]);
       warning = (warning ? `${warning} ` : '') +
@@ -233,7 +356,6 @@ async function upsertCamera({
     return item;
   }
 
-  // Slot already taken by another camera → replace that slot
   if (slotRow) {
     warning =
       `Se reemplazó la cámara anterior en ${line} ${pr.product.toUpperCase()} ${pr.role}` +
@@ -282,10 +404,16 @@ async function deleteCamera(id) {
 module.exports = {
   discoverCamera,
   listCameras,
+  listCamerasByLine,
   upsertCamera,
   deleteCamera,
   refreshCameraMapCache,
   getMergedCameraMap,
+  getEolColumnLabels,
+  lookupCamera,
+  resolveStationRole,
+  isStationLabel,
   toCameraId,
   normalizeIp,
+  cameraKeyVariants,
 };

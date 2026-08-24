@@ -674,10 +674,17 @@ function renderImlaHomeLines(byLine = []) {
   });
 }
 
+function camStationHint(cameras = [], role) {
+  const c = (cameras || []).find((x) => String(x.role || '').toUpperCase() === String(role || '').toUpperCase());
+  if (!c) return '';
+  return `<div class="cam-station-hint" title="${c.cameraId || ''}">${c.ip || '—'} · ${c.serialNumber || '—'}</div>`;
+}
+
 async function loadImlaDashboard() {
   const route = getRoute();
   updateImlaChrome(route);
   const data = await api(`/api/dashboard?${imlaQs()}`);
+  const cams = data.registeredCameras || [];
 
   if (route.page === 'line') {
     $('kpiRow').innerHTML = `
@@ -686,11 +693,11 @@ async function loadImlaDashboard() {
         <div class="kpi-row nested">${renderKpiCards(data.summary)}</div>
       </section>
       <section class="line-kpi-block current kpi-view-top">
-        <header class="line-kpi-header"><h3>TOP</h3></header>
+        <header class="line-kpi-header"><h3>TOP</h3>${camStationHint(cams, 'TOP')}</header>
         <div class="kpi-row nested">${renderKpiCards(data.summaryTop || data.summary)}</div>
       </section>
       <section class="line-kpi-block current kpi-view-bot">
-        <header class="line-kpi-header"><h3>BOT</h3></header>
+        <header class="line-kpi-header"><h3>BOT</h3>${camStationHint(cams, 'BOT')}</header>
         <div class="kpi-row nested">${renderKpiCards(data.summaryBot || data.summary)}</div>
       </section>
     `;
@@ -897,9 +904,10 @@ async function loadEolDashboard() {
 
   if (route.page === 'line') {
     const cams = data.byCamera || [];
+    const registered = data.registeredCameras || [];
     const camBlocks = cams.map((cam) => `
       <section class="line-kpi-block current kpi-view-cam" data-cam="${cam.view}">
-        <header class="line-kpi-header"><h3>${cam.view}</h3></header>
+        <header class="line-kpi-header"><h3>${cam.view}</h3>${camStationHint(registered, cam.view)}</header>
         <div class="kpi-row nested">${renderKpiCards(cam, { includeCarriers: false })}</div>
       </section>
     `).join('');
@@ -1032,9 +1040,10 @@ async function loadEolInspections() {
     offset: state.eolOffset,
   };
   const data = await api(`/api/eol/inspections?${eolQs(extra)}`);
-  const camCols = (data.cameraViews && data.cameraViews.length)
-    ? data.cameraViews
+  const camCols = (Array.isArray(data.cameraViews) && data.cameraViews.length)
+    ? data.cameraViews.filter((c) => /^EOL[1-5]$/i.test(c))
     : ['EOL1', 'EOL2', 'EOL3', 'EOL4', 'EOL5'];
+  if (!camCols.length) camCols.push('EOL1', 'EOL2', 'EOL3', 'EOL4', 'EOL5');
 
   const thead = document.querySelector('#eolInspTable thead tr');
   if (thead) {

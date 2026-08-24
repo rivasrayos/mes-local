@@ -369,6 +369,17 @@ select, input {
   letter-spacing: -0.02em;
 }
 
+.cam-station-hint {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted, #5a6b78);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 16rem;
+}
+
 .btn-line {
   background: var(--accent);
   border-color: var(--accent);
