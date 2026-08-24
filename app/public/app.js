@@ -19,6 +19,8 @@ const $ = (id) => document.getElementById(id);
  *  #/eol/line/L12          EOL line
  *  #/settings              admin tools hub
  *  #/settings/cameras      camera registry tool
+ *  #/settings/camera-status  live OV80i diagnostics
+ *  #/settings/ntp          NTP server / time sync
  */
 function getRoute() {
   let raw = (location.hash || '#/').replace(/^#/, '') || '/';
@@ -84,26 +86,31 @@ function renderSettingsView() {
   }
 
   const tool = route.page === 'tool' ? (route.tool || '') : '';
-  const known = new Set(['cameras', 'camera-status']);
+  const known = new Set(['cameras', 'camera-status', 'ntp']);
   if (route.page === 'tool' && tool && !known.has(tool)) {
     goSettings();
     return;
   }
   const onCameras = tool === 'cameras';
   const onDiag = tool === 'camera-status';
-  $('settingsHubPanel')?.classList.toggle('hidden', onCameras || onDiag);
+  const onNtp = tool === 'ntp';
+  const inTool = onCameras || onDiag || onNtp;
+  $('settingsHubPanel')?.classList.toggle('hidden', inTool);
   $('settingsToolCameras')?.classList.toggle('hidden', !onCameras);
   $('settingsToolCameraStatus')?.classList.toggle('hidden', !onDiag);
+  $('settingsToolNtp')?.classList.toggle('hidden', !onNtp);
 
   const sub = document.querySelector('#view-settings .brand-block .sub');
   if (sub) {
     if (onCameras) sub.textContent = 'Cámaras Overview · registro por IP / serial / rol';
     else if (onDiag) sub.textContent = 'Estado de cámaras · diagnóstico OV80i en vivo';
+    else if (onNtp) sub.textContent = 'Servidor NTP · sincronizar hora de cámaras';
     else sub.textContent = 'Herramientas de configuración y diagnóstico';
   }
 
   if (onCameras) loadCameraRegistry().catch(console.error);
   if (onDiag) prepareDiagFilters().then(() => loadCameraStatusUi()).catch(console.error);
+  if (onNtp) prepareNtpFilters().catch(console.error);
 }
 
 function esc(s) {
@@ -126,6 +133,47 @@ async function prepareDiagFilters() {
     .concat(lines.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`))
     .join('');
   if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+}
+
+async function prepareNtpFilters() {
+  const data = await api('/api/settings/cameras');
+  const items = data.items || [];
+  const lines = [...new Set(items.map((c) => c.lineNumber).filter(Boolean))]
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+  const sel = $('ntpFilterLine');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = ['<option value="">Todas</option>']
+    .concat(lines.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`))
+    .join('');
+  if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+}
+
+function renderNtpResults(data) {
+  const box = $('ntpResultBox');
+  if (!box) return;
+  const rows = data.results || [];
+  if (!rows.length) {
+    box.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+  box.classList.remove('hidden');
+  box.innerHTML = `
+    <table>
+      <thead><tr><th>Línea</th><th>Rol</th><th>IP</th><th>Resultado</th></tr></thead>
+      <tbody>
+        ${rows.map((r) => `
+          <tr>
+            <td>${esc(r.lineNumber || '—')}</td>
+            <td>${esc(r.role || '—')}</td>
+            <td>${esc(r.ip || '—')}</td>
+            <td class="${r.ok ? 'ok' : 'err'}">${r.ok ? 'OK' : esc(r.error || 'error')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
 }
 
 function renderDiagCard(cam) {
@@ -1462,55 +1510,56 @@ function wireUi() {
   });
   $('settingsToolBackBtn')?.addEventListener('click', () => goSettings());
   $('diagToolBackBtn')?.addEventListener('click', () => goSettings());
+  $('ntpToolBackBtn')?.addEventListener('click', () => goSettings());
   $('diagRefreshBtn')?.addEventListener('click', () => loadCameraStatusUi().catch(console.error));
   $('diagFilterLine')?.addEventListener('change', () => loadCameraStatusUi().catch(console.error));
   $('diagFilterProduct')?.addEventListener('change', () => loadCameraStatusUi().catch(console.error));
 
-  async function diagFilterBody() {
+  async function ntpFilterBody() {
     return {
-      lineNumber: ($('diagFilterLine')?.value || '').trim(),
-      product: ($('diagFilterProduct')?.value || '').trim(),
+      lineNumber: ($('ntpFilterLine')?.value || '').trim(),
+      product: ($('ntpFilterProduct')?.value || '').trim(),
     };
   }
 
-  $('diagApplyNtpBtn')?.addEventListener('click', async () => {
-    const msg = $('diagNtpMsg');
-    const ntpServer = ($('diagNtpServer')?.value || '').trim();
+  $('ntpApplyBtn')?.addEventListener('click', async () => {
+    const msg = $('ntpMsg');
+    const ntpServer = ($('ntpServerInput')?.value || '').trim();
     if (!ntpServer) {
       setCamMsg(msg, 'Escribe la IP del servidor NTP', 'err');
       return;
     }
-    if (!confirm(`¿Aplicar NTP ${ntpServer} a las cámaras del filtro actual?`)) return;
+    if (!confirm(`¿Aplicar NTP ${ntpServer} a las cámaras del filtro?`)) return;
     setCamMsg(msg, 'Aplicando NTP…', '');
     try {
       const res = await fetch('/api/settings/camera-status/ntp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ntpServer, ...(await diagFilterBody()) }),
+        body: JSON.stringify({ ntpServer, ...(await ntpFilterBody()) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'No se pudo aplicar NTP');
       setCamMsg(msg, `NTP aplicado: ${data.okCount}/${data.total} OK`, data.failCount ? 'err' : 'ok');
-      await loadCameraStatusUi();
+      renderNtpResults(data);
     } catch (err) {
       setCamMsg(msg, err.message || String(err), 'err');
     }
   });
 
-  $('diagSyncTimeBtn')?.addEventListener('click', async () => {
-    const msg = $('diagNtpMsg');
-    if (!confirm('¿Poner la hora del MES en las cámaras del filtro? (ajuste único; conviene NTP después)')) return;
+  $('ntpSyncTimeBtn')?.addEventListener('click', async () => {
+    const msg = $('ntpMsg');
+    if (!confirm('¿Poner la hora del MES en las cámaras del filtro?')) return;
     setCamMsg(msg, 'Sincronizando hora…', '');
     try {
       const res = await fetch('/api/settings/camera-status/sync-time', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(await diagFilterBody()),
+        body: JSON.stringify(await ntpFilterBody()),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'No se pudo sincronizar');
       setCamMsg(msg, `Hora sync: ${data.okCount}/${data.total} OK`, data.failCount ? 'err' : 'ok');
-      await loadCameraStatusUi();
+      renderNtpResults(data);
     } catch (err) {
       setCamMsg(msg, err.message || String(err), 'err');
     }

@@ -92,6 +92,12 @@
             <p>Receta · versión · disco · red · en línea</p>
             <span class="product-cta">Abrir →</span>
           </button>
+          <button type="button" class="product-card settings-tool" data-settings-tool="ntp">
+            <p class="product-kicker">Tiempo</p>
+            <h2>Servidor NTP</h2>
+            <p>Sincronizar hora · aplicar NTP a cámaras</p>
+            <span class="product-cta">Abrir →</span>
+          </button>
         </section>
       </div>
 
@@ -225,25 +231,67 @@
             <button id="diagRefreshBtn" class="btn btn-accent" type="button">Actualizar estado</button>
           </div>
           <p id="diagMeta" class="settings-hint"></p>
-
-          <div class="settings-block diag-ntp-block">
-            <h3>NTP / hora</h3>
-            <p class="settings-hint">
-              Las cámaras tienen NTP pero muchas sin servidor. Puedes apuntarlas a la PC del MES
-              (si corre un servicio NTP) o a cualquier NTP de planta, y/o sincronizar la hora ahora.
-            </p>
-            <div class="settings-row wrap">
-              <label class="field grow">
-                <span>Servidor NTP (IP de la PC MES u otro)</span>
-                <input id="diagNtpServer" type="text" placeholder="192.168.11.87" />
-              </label>
-              <button id="diagApplyNtpBtn" class="btn btn-accent" type="button">Aplicar NTP a filtradas</button>
-              <button id="diagSyncTimeBtn" class="btn" type="button">Sincronizar hora ahora</button>
-            </div>
-            <p id="diagNtpMsg" class="settings-msg hidden" role="status"></p>
-          </div>
-
           <div id="diagCards" class="diag-cards"></div>
+        </div>
+      </div>
+
+      <div id="settingsToolNtp" class="settings-tool-panel hidden">
+        <div class="settings-tool-head">
+          <button id="ntpToolBackBtn" class="btn" type="button">← Herramientas</button>
+          <div>
+            <h2>Servidor NTP</h2>
+            <p class="settings-hint">
+              Apunta las cámaras OV80i a un servidor NTP (PC MES u otro de planta) y/o sincroniza la hora ahora.
+            </p>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>Alcance</h3>
+          <div class="settings-row wrap">
+            <label class="field">
+              <span>Línea</span>
+              <select id="ntpFilterLine">
+                <option value="">Todas</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Producto</span>
+              <select id="ntpFilterProduct">
+                <option value="">Todos</option>
+                <option value="eol">EOL</option>
+                <option value="imla">IMLA</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>Servidor NTP</h3>
+          <p class="settings-hint">
+            Usa la IP LAN de la PC del MES si ahí corre chrony/ntp (UDP 123), o un NTP de planta.
+            Ejemplo: 192.168.11.87
+          </p>
+          <div class="settings-row wrap">
+            <label class="field grow">
+              <span>IP / hostname del servidor NTP</span>
+              <input id="ntpServerInput" type="text" placeholder="192.168.11.87" />
+            </label>
+            <button id="ntpApplyBtn" class="btn btn-accent" type="button">Aplicar NTP a cámaras</button>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <h3>Sincronizar ahora</h3>
+          <p class="settings-hint">
+            Ajuste único: copia la hora actual del servidor MES a las cámaras filtradas.
+            Conviene después tener NTP configurado para que no se vuelvan a desfasar.
+          </p>
+          <div class="settings-row wrap">
+            <button id="ntpSyncTimeBtn" class="btn" type="button">Sincronizar hora ahora</button>
+          </div>
+          <p id="ntpMsg" class="settings-msg hidden" role="status"></p>
+          <div id="ntpResultBox" class="ntp-result hidden"></div>
         </div>
       </div>
     </section>

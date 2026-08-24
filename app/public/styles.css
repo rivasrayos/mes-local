@@ -1037,16 +1037,26 @@ th {
   font-size: 0.82rem;
 }
 
-.diag-ntp-block {
+.ntp-result {
   margin-top: 0.85rem;
-  border-top: 1px solid rgba(197, 208, 217, 0.85);
-  padding-top: 0.85rem;
+  overflow: auto;
 }
 
-.diag-ntp-block h3 {
-  margin: 0 0 0.35rem;
-  font-size: 1rem;
+.ntp-result table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
 }
+
+.ntp-result th,
+.ntp-result td {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid rgba(197, 208, 217, 0.85);
+}
+
+.ntp-result td.ok { color: var(--pass, #0f7a45); }
+.ntp-result td.err { color: var(--fail, #b42318); }
 
 .settings-block {
   margin-top: 1.15rem;
