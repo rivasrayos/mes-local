@@ -444,13 +444,19 @@ async function syncTimeToRegistered({
         error: `No se pudo desactivar NTP: ${off.error || 'error'}`,
       };
     }
-    await new Promise((r) => setTimeout(r, 500));
 
-    const set = await fetchJson(reg.ip, '/edge/v2/device/time', {
-      method: 'POST',
-      timeoutMs: WRITE_MS,
-      body: { now_us: nowUs },
-    });
+    // timedate1 may refuse SetTime briefly after toggling NTP
+    let set = { ok: false, error: 'not attempted' };
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      await new Promise((r) => setTimeout(r, 600 * attempt));
+      set = await fetchJson(reg.ip, '/edge/v2/device/time', {
+        method: 'POST',
+        timeoutMs: WRITE_MS,
+        body: { now_us: Math.round(Date.now() * 1000) },
+      });
+      if (set.ok) break;
+      if (!/AutomaticTimeSync|not finished|refusing/i.test(String(set.error || ''))) break;
+    }
     if (!set.ok) {
       return {
         ...base,
@@ -467,11 +473,12 @@ async function syncTimeToRegistered({
       });
     }
 
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 400));
     const after = await fetchJson(reg.ip, '/edge/v2/device/time', { timeoutMs: WRITE_MS });
     let skewSec = null;
     if (after.ok && after.data?.now_us != null) {
-      skewSec = Math.round((Number(after.data.now_us) - Date.now() * 1000) / 1000);
+      // now_us is microseconds; Date.now() is milliseconds
+      skewSec = Math.round((Number(after.data.now_us) / 1000 - Date.now()) / 1000);
     }
 
     const skewBad = skewSec != null && Math.abs(skewSec) > 5;
