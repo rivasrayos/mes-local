@@ -941,6 +941,141 @@ th {
   max-width: 1100px;
 }
 
+#view-settings.settings-wide.app {
+  width: min(1760px, calc(100% - 1.25rem));
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.settings-panel.settings-app.settings-app-wide {
+  max-width: none;
+  width: 100%;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.settings-tool-wide .settings-tool-head {
+  margin-bottom: 0.85rem;
+}
+
+.diag-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 0.65rem;
+}
+
+.diag-toolbar .settings-hint {
+  margin: 0;
+}
+
+.diag-list {
+  margin-top: 0.25rem;
+}
+
+.diag-table-wrap {
+  overflow: auto;
+  max-width: 100%;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(197, 208, 217, 0.55);
+}
+
+.diag-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.86rem;
+  table-layout: fixed;
+}
+
+.diag-table th,
+.diag-table td {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid rgba(197, 208, 217, 0.55);
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diag-table th {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #5a6b78);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(248, 250, 252, 0.96);
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+
+.diag-table tbody tr:hover td {
+  background: rgba(15, 110, 124, 0.05);
+}
+
+.diag-table tr.err td {
+  background: rgba(180, 35, 24, 0.035);
+}
+
+.diag-table .diag-warn-cell {
+  color: #b42318;
+}
+
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+}
+
+.col-resizer::after {
+  content: "";
+  position: absolute;
+  top: 22%;
+  bottom: 22%;
+  left: 3px;
+  width: 2px;
+  border-radius: 2px;
+  background: rgba(90, 107, 120, 0.35);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.diag-table th:hover .col-resizer::after,
+body.col-resizing .col-resizer::after {
+  opacity: 1;
+}
+
+body.col-resizing {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+body.col-resizing * {
+  cursor: col-resize !important;
+}
+
+.diag-warn {
+  margin: 0.7rem 0 0;
+  padding-left: 1.1rem;
+  color: #b42318;
+  font-size: 0.82rem;
+}
+
 .settings-tools {
   margin-top: 0.85rem;
 }
@@ -964,59 +1099,6 @@ th {
 
 .settings-tool-head .settings-hint {
   margin: 0;
-}
-
-.diag-list {
-  margin-top: 0.75rem;
-}
-
-.diag-table-wrap {
-  overflow: auto;
-  max-width: 100%;
-}
-
-.diag-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.84rem;
-  white-space: nowrap;
-}
-
-.diag-table th,
-.diag-table td {
-  text-align: left;
-  padding: 0.45rem 0.55rem;
-  border-bottom: 1px solid rgba(197, 208, 217, 0.85);
-  vertical-align: middle;
-}
-
-.diag-table th {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted, #5a6b78);
-  position: sticky;
-  top: 0;
-  background: var(--panel, #fff);
-}
-
-.diag-table tr.err td {
-  background: rgba(180, 35, 24, 0.04);
-}
-
-.diag-table .diag-warn-cell {
-  max-width: 14rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #b42318;
-  white-space: nowrap;
-}
-
-.diag-warn {
-  margin: 0.7rem 0 0;
-  padding-left: 1.1rem;
-  color: #b42318;
-  font-size: 0.82rem;
 }
 
 .ntp-result {

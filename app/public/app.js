@@ -99,6 +99,8 @@ function renderSettingsView() {
   $('settingsToolCameras')?.classList.toggle('hidden', !onCameras);
   $('settingsToolCameraStatus')?.classList.toggle('hidden', !onDiag);
   $('settingsToolNtp')?.classList.toggle('hidden', !onNtp);
+  $('view-settings')?.classList.toggle('settings-wide', onDiag || onNtp);
+  $('settingsAppPanel')?.classList.toggle('settings-app-wide', onDiag || onNtp);
 
   const sub = document.querySelector('#view-settings .brand-block .sub');
   if (sub) {
@@ -227,31 +229,101 @@ function renderDiagTable(cams = []) {
   }).join('');
 
   return `
-    <div class="table-wrap diag-table-wrap">
-      <table class="diag-table">
+    <div class="diag-table-wrap">
+      <table class="diag-table" id="diagStatusTable">
         <thead>
           <tr>
-            <th>Línea</th>
-            <th>Producto</th>
-            <th>Rol</th>
-            <th>IP</th>
-            <th>Estado</th>
-            <th>Serial</th>
-            <th>Versión</th>
-            <th>Hostname</th>
-            <th>Receta</th>
-            <th>Deploy</th>
-            <th>Disco</th>
-            <th>Skew</th>
-            <th>NTP</th>
-            <th>Industrial</th>
-            <th>LINE_CODE</th>
-            <th>Avisos</th>
+            <th data-col="line">Línea</th>
+            <th data-col="product">Producto</th>
+            <th data-col="role">Rol</th>
+            <th data-col="ip">IP</th>
+            <th data-col="status">Estado</th>
+            <th data-col="serial">Serial</th>
+            <th data-col="version">Versión</th>
+            <th data-col="host">Hostname</th>
+            <th data-col="recipe">Receta</th>
+            <th data-col="deploy">Deploy</th>
+            <th data-col="disk">Disco</th>
+            <th data-col="skew">Skew</th>
+            <th data-col="ntp">NTP</th>
+            <th data-col="ind">Industrial</th>
+            <th data-col="linecode">LINE_CODE</th>
+            <th data-col="warn">Avisos</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+}
+
+function wireDiagColumnResize(root) {
+  const table = root?.querySelector?.('#diagStatusTable') || $('diagStatusTable');
+  if (!table) return;
+  const cols = [...table.querySelectorAll('thead th')];
+  const storageKey = 'mes.diag.colWidths';
+  const defaults = {
+    line: '72px',
+    product: '88px',
+    role: '72px',
+    ip: '118px',
+    status: '108px',
+    serial: '150px',
+    version: '88px',
+    host: '150px',
+    recipe: '220px',
+    deploy: '90px',
+    disk: '72px',
+    skew: '72px',
+    ntp: '180px',
+    ind: '110px',
+    linecode: '110px',
+    warn: '200px',
+  };
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch (_) { saved = {}; }
+
+  cols.forEach((th, idx) => {
+    const key = th.dataset.col || String(idx);
+    const width = saved[key] || defaults[key];
+    if (width) {
+      th.style.width = width;
+      th.style.minWidth = width;
+    }
+    th.style.position = 'relative';
+    if (th.querySelector('.col-resizer')) return;
+    const handle = document.createElement('span');
+    handle.className = 'col-resizer';
+    handle.title = 'Arrastra para cambiar ancho';
+    th.appendChild(handle);
+
+    let startX = 0;
+    let startW = 0;
+    const onMove = (e) => {
+      const w = Math.max(56, startW + (e.clientX - startX));
+      th.style.width = `${w}px`;
+      th.style.minWidth = `${w}px`;
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.classList.remove('col-resizing');
+      const next = {};
+      cols.forEach((h, i) => {
+        const k = h.dataset.col || String(i);
+        if (h.style.width) next[k] = h.style.width;
+      });
+      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch (_) { /* ignore */ }
+    };
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      startX = e.clientX;
+      startW = th.getBoundingClientRect().width;
+      document.body.classList.add('col-resizing');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
 }
 
 async function loadCameraStatusUi() {
@@ -276,6 +348,7 @@ async function loadCameraStatusUi() {
       return;
     }
     box.innerHTML = renderDiagTable(cams);
+    wireDiagColumnResize(box);
   } catch (err) {
     box.innerHTML = `<p class="settings-msg err">${esc(err.message || err)}</p>`;
   }
