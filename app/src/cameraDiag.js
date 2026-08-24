@@ -234,9 +234,6 @@ async function probeCamera(ipRaw, registry = null) {
   const ntpServers = ntp.ok && Array.isArray(ntp.data?.servers)
     ? ntp.data.servers.filter(Boolean)
     : [];
-  if (ntpEnabled === true && !ntpServers.length) {
-    warnings.push('NTP activo pero sin servidor configurado');
-  }
 
   if (!online) warnings.push('Cámara no responde');
 
