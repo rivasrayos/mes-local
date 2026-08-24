@@ -97,8 +97,26 @@ async function ensureSchema() {
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_records_cable ON eol_records (cable_id)`);
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_records_cycle ON eol_records (cycle_id)`);
 
-  // Backfill view labels from known cameraId → EOL1..EOL5 map
-  const { eolCameraMap } = require('./config');
+  await query(`
+    CREATE TABLE IF NOT EXISTS camera_registry (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      ip              TEXT NOT NULL UNIQUE,
+      serial_number   TEXT NOT NULL,
+      camera_id       TEXT NOT NULL,
+      line_number     TEXT NOT NULL DEFAULT '',
+      product         TEXT NOT NULL,
+      role            TEXT NOT NULL,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_camera_registry_line ON camera_registry (line_number)`);
+  await query(`CREATE INDEX IF NOT EXISTS idx_camera_registry_camera ON camera_registry (camera_id)`);
+
+  // Backfill view labels from known cameraId → EOL1..EOL5 map (+ registry)
+  const { getMergedCameraMap, refreshCameraMapCache } = require('./cameras');
+  await refreshCameraMapCache().catch(() => {});
+  const eolCameraMap = getMergedCameraMap();
   for (const [key, label] of Object.entries(eolCameraMap || {})) {
     if (!key || !label || !key.startsWith('ov80i')) continue;
     await query(

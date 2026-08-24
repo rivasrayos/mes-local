@@ -19,6 +19,12 @@ const {
   deleteEolByDateRange,
   toEolCsv,
 } = require('./eol');
+const {
+  discoverCamera,
+  listCameras,
+  upsertCamera,
+  deleteCamera,
+} = require('./cameras');
 
 const router = express.Router();
 
@@ -192,6 +198,42 @@ router.delete('/eol/history', async (req, res, next) => {
     const { from, to, before } = { ...req.query, ...req.body };
     const result = await deleteEolByDateRange({ from, to, before });
     res.json({ ok: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// -------------------- Settings / cameras --------------------
+
+router.post('/settings/cameras/discover', async (req, res, next) => {
+  try {
+    const result = await discoverCamera(req.body?.ip);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/settings/cameras', async (_req, res, next) => {
+  try {
+    res.json({ items: await listCameras() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings/cameras', async (req, res, next) => {
+  try {
+    const item = await upsertCamera(req.body || {});
+    res.status(201).json({ ok: true, item });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/settings/cameras/:id', async (req, res, next) => {
+  try {
+    res.json({ ok: true, ...(await deleteCamera(req.params.id)) });
   } catch (err) {
     next(err);
   }

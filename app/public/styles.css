@@ -925,3 +925,89 @@ th {
   margin: 0;
   color: var(--muted);
 }
+
+.settings-panel.settings-app {
+  max-width: 960px;
+}
+
+.settings-block {
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(197, 208, 217, 0.85);
+}
+
+.settings-block h3 {
+  margin: 0 0 0.65rem;
+  font-size: 1rem;
+}
+
+.settings-row {
+  display: flex;
+  gap: 0.7rem;
+  align-items: end;
+}
+
+.settings-row.wrap {
+  flex-wrap: wrap;
+}
+
+.settings-row .field.grow {
+  flex: 1;
+  min-width: 180px;
+}
+
+.settings-row .field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.settings-row .field span {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings-row input,
+.settings-row select {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  background: #fff;
+  min-width: 120px;
+}
+
+.settings-kv {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 0.85rem;
+}
+
+.settings-kv div {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(197, 208, 217, 0.8);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+}
+
+.settings-kv span {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.settings-kv strong {
+  font-family: var(--mono);
+  font-size: 0.92rem;
+}
+
+.settings-msg {
+  margin: 0.55rem 0 0;
+  font-size: 0.92rem;
+}
+
+.settings-msg.ok { color: var(--pass); }
+.settings-msg.err { color: var(--fail); }

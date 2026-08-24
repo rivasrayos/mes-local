@@ -75,11 +75,76 @@
       </form>
     </section>
 
-    <section id="settingsAppPanel" class="settings-panel hidden">
-      <h2>Panel de administración</h2>
-      <p class="settings-hint">Sesión iniciada como <strong>admin</strong>. Aquí irán las opciones de configuración.</p>
-      <div class="settings-placeholder">
-        <p>Listo para continuar (mapeo de cámaras EOL, etc.).</p>
+    <section id="settingsAppPanel" class="settings-panel settings-app hidden">
+      <h2>Cámaras Overview</h2>
+      <p class="settings-hint">Busca por IP, confirma el serial y asígnala a línea + rol (EOL u IMLA).</p>
+
+      <div class="settings-block">
+        <h3>1. Buscar cámara</h3>
+        <div class="settings-row">
+          <label class="field grow">
+            <span>IP de la cámara</span>
+            <input id="camIpInput" type="text" placeholder="192.168.11.174" />
+          </label>
+          <button id="camDiscoverBtn" class="btn btn-accent" type="button">Buscar</button>
+        </div>
+        <p id="camDiscoverMsg" class="settings-msg hidden" role="status"></p>
+      </div>
+
+      <div id="camAssignBlock" class="settings-block hidden">
+        <h3>2. Asignar</h3>
+        <div class="settings-kv">
+          <div><span>IP</span><strong id="camFoundIp">—</strong></div>
+          <div><span>Serial</span><strong id="camFoundSerial">—</strong></div>
+          <div><span>Camera ID</span><strong id="camFoundId">—</strong></div>
+        </div>
+        <div class="settings-row wrap">
+          <label class="field">
+            <span>Línea</span>
+            <input id="camLineInput" type="text" placeholder="L11" />
+          </label>
+          <label class="field">
+            <span>Producto</span>
+            <select id="camProductSelect">
+              <option value="eol">EOL</option>
+              <option value="imla">IMLA</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Rol</span>
+            <select id="camRoleSelect">
+              <option value="EOL1">EOL1</option>
+              <option value="EOL2">EOL2</option>
+              <option value="EOL3">EOL3</option>
+              <option value="EOL4">EOL4</option>
+              <option value="EOL5">EOL5</option>
+            </select>
+          </label>
+          <button id="camSaveBtn" class="btn btn-accent" type="button">Guardar cámara</button>
+        </div>
+        <p id="camSaveMsg" class="settings-msg hidden" role="status"></p>
+      </div>
+
+      <div class="settings-block">
+        <h3>Cámaras registradas</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Línea</th>
+                <th>Producto</th>
+                <th>Rol</th>
+                <th>IP</th>
+                <th>Serial</th>
+                <th>Camera ID</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="camRegistryBody">
+              <tr><td colspan="7">Sin cámaras aún</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   </div>

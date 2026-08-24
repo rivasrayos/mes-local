@@ -75,7 +75,115 @@ function renderSettingsView() {
   if (!loggedIn) {
     $('settingsLoginError').classList.add('hidden');
     $('settingsLoginError').textContent = '';
+    return;
   }
+  loadCameraRegistry().catch(console.error);
+}
+
+function syncCamRoleOptions() {
+  const product = $('camProductSelect').value;
+  const sel = $('camRoleSelect');
+  const roles = product === 'imla'
+    ? ['TOP', 'BOT']
+    : ['EOL1', 'EOL2', 'EOL3', 'EOL4', 'EOL5'];
+  sel.innerHTML = roles.map((r) => `<option value="${r}">${r}</option>`).join('');
+}
+
+function setCamMsg(el, text, kind) {
+  if (!text) {
+    el.classList.add('hidden');
+    el.textContent = '';
+    return;
+  }
+  el.textContent = text;
+  el.classList.remove('hidden', 'ok', 'err');
+  if (kind) el.classList.add(kind);
+}
+
+async function discoverCameraUi() {
+  const ip = ($('camIpInput').value || '').trim();
+  const msg = $('camDiscoverMsg');
+  setCamMsg(msg, 'Buscando…', '');
+  $('camAssignBlock').classList.add('hidden');
+  try {
+    const res = await fetch('/api/settings/cameras/discover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'No se encontró la cámara');
+    $('camFoundIp').textContent = data.ip || ip;
+    $('camFoundSerial').textContent = data.serialNumber || '—';
+    $('camFoundId').textContent = data.cameraId || '—';
+    $('camAssignBlock').classList.remove('hidden');
+    setCamMsg(msg, `Encontrada: ${data.serialNumber}`, 'ok');
+  } catch (err) {
+    setCamMsg(msg, err.message || String(err), 'err');
+  }
+}
+
+async function saveCameraUi() {
+  const msg = $('camSaveMsg');
+  setCamMsg(msg, 'Guardando…', '');
+  try {
+    const body = {
+      ip: $('camFoundIp').textContent,
+      serialNumber: $('camFoundSerial').textContent,
+      cameraId: $('camFoundId').textContent,
+      lineNumber: ($('camLineInput').value || '').trim(),
+      product: $('camProductSelect').value,
+      role: $('camRoleSelect').value,
+    };
+    const res = await fetch('/api/settings/cameras', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
+    setCamMsg(msg, `Guardada: ${body.lineNumber} · ${body.product.toUpperCase()} ${body.role}`, 'ok');
+    await loadCameraRegistry();
+  } catch (err) {
+    setCamMsg(msg, err.message || String(err), 'err');
+  }
+}
+
+async function loadCameraRegistry() {
+  const tbody = $('camRegistryBody');
+  if (!tbody) return;
+  try {
+    const data = await api('/api/settings/cameras');
+    const items = data.items || [];
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="7">Sin cámaras aún</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map((c) => `
+      <tr>
+        <td>${c.lineNumber || '—'}</td>
+        <td>${(c.product || '').toUpperCase()}</td>
+        <td>${c.role || '—'}</td>
+        <td>${c.ip || '—'}</td>
+        <td>${c.serialNumber || '—'}</td>
+        <td>${c.cameraId || '—'}</td>
+        <td><button type="button" class="btn" data-cam-del="${c.id}">Borrar</button></td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7">${err.message || err}</td></tr>`;
+  }
+}
+
+async function deleteCameraUi(id) {
+  if (!id || !confirm('¿Borrar esta cámara del registro?')) return;
+  const res = await fetch(`/api/settings/cameras/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    alert(data.error || 'No se pudo borrar');
+    return;
+  }
+  await loadCameraRegistry();
 }
 
 function ensureRoute() {
@@ -1143,6 +1251,22 @@ function wireUi() {
     }
     err.textContent = 'Usuario o contraseña incorrectos.';
     err.classList.remove('hidden');
+  });
+
+  syncCamRoleOptions();
+  $('camProductSelect').addEventListener('change', syncCamRoleOptions);
+  $('camDiscoverBtn').addEventListener('click', () => discoverCameraUi().catch(console.error));
+  $('camSaveBtn').addEventListener('click', () => saveCameraUi().catch(console.error));
+  $('camIpInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      discoverCameraUi().catch(console.error);
+    }
+  });
+  $('camRegistryBody').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-cam-del]');
+    if (!btn) return;
+    deleteCameraUi(btn.getAttribute('data-cam-del')).catch(console.error);
   });
 
   $('backBtn').addEventListener('click', () => {

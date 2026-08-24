@@ -1,6 +1,6 @@
 const { query, withTransaction } = require('./db');
 const { formatInTz, formatWallClock } = require('./time');
-const config = require('./config');
+const { getMergedCameraMap } = require('./cameras');
 
 const DEFAULT_LEG_MAPPING = '1a2a3a4a1b2b3b4b';
 
@@ -14,7 +14,7 @@ function resolveCameraView(rec = {}) {
   const explicit = rec.view || rec.cameraName || rec.camName || rec.cam;
   if (explicit && String(explicit).trim()) return String(explicit).trim();
 
-  const map = config.eolCameraMap || {};
+  const map = getMergedCameraMap();
   const cameraId = String(rec.cameraId || '').trim();
   if (cameraId && map[cameraId]) return map[cameraId];
 
@@ -29,7 +29,7 @@ function isFail(value) {
 }
 
 function resolveViewLabel(viewName, cameraId, imageUrl) {
-  const map = config.eolCameraMap || {};
+  const map = getMergedCameraMap();
   const id = String(cameraId || '').trim();
   if (id && map[id]) return map[id];
 
@@ -46,7 +46,7 @@ function resolveViewLabel(viewName, cameraId, imageUrl) {
 
 /** Prefer map / EOL* labels; never leave bare camera serials when a free EOLn exists */
 function buildCameraLabelResolver(cameraRows = []) {
-  const map = config.eolCameraMap || {};
+  const map = getMergedCameraMap();
   const known = new Map();
   const ids = [];
 
