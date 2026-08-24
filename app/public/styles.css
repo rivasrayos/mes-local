@@ -966,6 +966,77 @@ th {
   margin: 0;
 }
 
+.diag-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.diag-card {
+  border: 1px solid rgba(197, 208, 217, 0.9);
+  border-radius: 14px;
+  background: var(--panel, #fff);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow);
+}
+
+.diag-card.err {
+  border-color: rgba(180, 35, 24, 0.35);
+}
+
+.diag-card.ok {
+  border-color: rgba(15, 110, 124, 0.35);
+}
+
+.diag-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+
+.diag-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.diag-card .muted {
+  margin: 0.15rem 0 0;
+  color: var(--muted, #5a6b78);
+  font-size: 0.82rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.diag-kv {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem 0.75rem;
+  margin: 0;
+}
+
+.diag-kv dt {
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted, #5a6b78);
+}
+
+.diag-kv dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.88rem;
+  word-break: break-word;
+}
+
+.diag-warn {
+  margin: 0.7rem 0 0;
+  padding-left: 1.1rem;
+  color: #b42318;
+  font-size: 0.82rem;
+}
+
 .settings-block {
   margin-top: 1.15rem;
   padding-top: 1rem;

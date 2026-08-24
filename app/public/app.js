@@ -84,23 +84,118 @@ function renderSettingsView() {
   }
 
   const tool = route.page === 'tool' ? (route.tool || '') : '';
-  const onCameras = tool === 'cameras';
-  if (route.page === 'tool' && tool && !onCameras) {
+  const known = new Set(['cameras', 'camera-status']);
+  if (route.page === 'tool' && tool && !known.has(tool)) {
     goSettings();
     return;
   }
-  $('settingsHubPanel')?.classList.toggle('hidden', onCameras);
+  const onCameras = tool === 'cameras';
+  const onDiag = tool === 'camera-status';
+  $('settingsHubPanel')?.classList.toggle('hidden', onCameras || onDiag);
   $('settingsToolCameras')?.classList.toggle('hidden', !onCameras);
+  $('settingsToolCameraStatus')?.classList.toggle('hidden', !onDiag);
 
   const sub = document.querySelector('#view-settings .brand-block .sub');
   if (sub) {
-    sub.textContent = onCameras
-      ? 'Cámaras Overview · registro por IP / serial / rol'
-      : 'Herramientas de configuración y diagnóstico';
+    if (onCameras) sub.textContent = 'Cámaras Overview · registro por IP / serial / rol';
+    else if (onDiag) sub.textContent = 'Estado de cámaras · diagnóstico OV80i en vivo';
+    else sub.textContent = 'Herramientas de configuración y diagnóstico';
   }
 
-  if (onCameras) {
-    loadCameraRegistry().catch(console.error);
+  if (onCameras) loadCameraRegistry().catch(console.error);
+  if (onDiag) prepareDiagFilters().then(() => loadCameraStatusUi()).catch(console.error);
+}
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function prepareDiagFilters() {
+  const data = await api('/api/settings/cameras');
+  const items = data.items || [];
+  const lines = [...new Set(items.map((c) => c.lineNumber).filter(Boolean))]
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+  const sel = $('diagFilterLine');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = ['<option value="">Todas</option>']
+    .concat(lines.map((l) => `<option value="${esc(l)}">${esc(l)}</option>`))
+    .join('');
+  if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+}
+
+function renderDiagCard(cam) {
+  const reg = cam.registry || {};
+  const recipe = cam.recipe || {};
+  const storage = cam.storage || {};
+  const warn = (cam.warnings || []).map((w) => `<li>${esc(w)}</li>`).join('');
+  const statusClass = cam.online ? 'ok' : 'err';
+  const statusLabel = cam.online ? 'En línea' : 'Sin respuesta';
+  const deploy = cam.deployment
+    ? (cam.deployment.overallDeployed ? 'OK' : 'Pendiente')
+    : '—';
+  const skew = cam.clockSkewSec == null
+    ? '—'
+    : `${cam.clockSkewSec > 0 ? '+' : ''}${cam.clockSkewSec}s`;
+  const title = [reg.lineNumber, (reg.product || '').toUpperCase(), reg.role].filter(Boolean).join(' · ')
+    || cam.ip;
+
+  return `
+    <article class="diag-card ${statusClass}">
+      <header>
+        <div>
+          <h3>${esc(title)}</h3>
+          <p class="muted">${esc(cam.ip)}${cam.latencyMs != null ? ` · ${cam.latencyMs} ms` : ''}</p>
+        </div>
+        <span class="badge ${cam.online ? 'pass' : 'fail'}">${statusLabel}</span>
+      </header>
+      <dl class="diag-kv">
+        <div><dt>Serial</dt><dd>${esc(cam.serialNumber || '—')}</dd></div>
+        <div><dt>Versión</dt><dd>${esc(cam.version || '—')}</dd></div>
+        <div><dt>Hostname</dt><dd>${esc(cam.hostname || cam.deviceName || '—')}</dd></div>
+        <div><dt>Receta</dt><dd>${esc(recipe.name || '—')}${recipe.plcRecipeId != null ? ` (PLC ${esc(recipe.plcRecipeId)})` : ''}</dd></div>
+        <div><dt>Bloques</dt><dd>${esc((recipe.blocks || []).join(', ') || '—')}</dd></div>
+        <div><dt>Deploy</dt><dd>${esc(deploy)}</dd></div>
+        <div><dt>Disco</dt><dd>${storage.percent != null ? `${esc(storage.percent)}% · libre ${esc(storage.freeLabel || '—')}` : '—'}</dd></div>
+        <div><dt>Red</dt><dd>${esc(cam.network?.address || '—')}${cam.network?.mac ? ` · ${esc(cam.network.mac)}` : ''}</dd></div>
+        <div><dt>Instalación / uptime</dt><dd>${esc(cam.uptimeLabel || cam.env?.dateInstalled || '—')}</dd></div>
+        <div><dt>Skew reloj</dt><dd>${esc(skew)}</dd></div>
+        <div><dt>Industrial</dt><dd>${esc(cam.industrialProtocol || '—')}</dd></div>
+        <div><dt>LINE_CODE</dt><dd>${esc(cam.env?.lineCode || '—')}</dd></div>
+      </dl>
+      ${warn ? `<ul class="diag-warn">${warn}</ul>` : ''}
+    </article>
+  `;
+}
+
+async function loadCameraStatusUi() {
+  const box = $('diagCards');
+  const meta = $('diagMeta');
+  if (!box) return;
+  const lineNumber = ($('diagFilterLine')?.value || '').trim();
+  const product = ($('diagFilterProduct')?.value || '').trim();
+  box.innerHTML = '<p class="settings-hint">Consultando cámaras…</p>';
+  if (meta) meta.textContent = 'Puede tardar unos segundos por cámara.';
+  try {
+    const qs = new URLSearchParams();
+    if (lineNumber) qs.set('lineNumber', lineNumber);
+    if (product) qs.set('product', product);
+    const data = await api(`/api/settings/camera-status?${qs}`);
+    if (meta) {
+      meta.textContent = `${data.online || 0} en línea · ${data.offline || 0} sin respuesta · ${data.total || 0} total`;
+    }
+    const cams = data.cameras || [];
+    if (!cams.length) {
+      box.innerHTML = '<p class="settings-hint">No hay cámaras registradas. Agrégalas en «Cámaras Overview».</p>';
+      return;
+    }
+    box.innerHTML = cams.map(renderDiagCard).join('');
+  } catch (err) {
+    box.innerHTML = `<p class="settings-msg err">${esc(err.message || err)}</p>`;
   }
 }
 
@@ -1359,6 +1454,10 @@ function wireUi() {
     });
   });
   $('settingsToolBackBtn')?.addEventListener('click', () => goSettings());
+  $('diagToolBackBtn')?.addEventListener('click', () => goSettings());
+  $('diagRefreshBtn')?.addEventListener('click', () => loadCameraStatusUi().catch(console.error));
+  $('diagFilterLine')?.addEventListener('change', () => loadCameraStatusUi().catch(console.error));
+  $('diagFilterProduct')?.addEventListener('change', () => loadCameraStatusUi().catch(console.error));
 
   syncCamRoleOptions();
   $('camProductSelect').addEventListener('change', syncCamRoleOptions);

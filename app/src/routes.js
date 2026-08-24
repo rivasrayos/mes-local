@@ -25,6 +25,7 @@ const {
   upsertCamera,
   deleteCamera,
 } = require('./cameras');
+const { probeCamera, probeRegisteredCameras } = require('./cameraDiag');
 
 const router = express.Router();
 
@@ -234,6 +235,27 @@ router.post('/settings/cameras', async (req, res, next) => {
 router.delete('/settings/cameras/:id', async (req, res, next) => {
   try {
     res.json({ ok: true, ...(await deleteCamera(req.params.id)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/settings/camera-status', async (req, res, next) => {
+  try {
+    const result = await probeRegisteredCameras({
+      lineNumber: req.query.lineNumber || '',
+      product: req.query.product || '',
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings/camera-status/probe', async (req, res, next) => {
+  try {
+    const item = await probeCamera(req.body?.ip);
+    res.json({ ok: true, item });
   } catch (err) {
     next(err);
   }

@@ -415,5 +415,6 @@ module.exports = {
   isStationLabel,
   toCameraId,
   normalizeIp,
+  isValidIpOrHost,
   cameraKeyVariants,
 };

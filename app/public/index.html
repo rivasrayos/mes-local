@@ -86,6 +86,12 @@
             <p>IP · serial · línea · rol (EOL / IMLA)</p>
             <span class="product-cta">Abrir →</span>
           </button>
+          <button type="button" class="product-card settings-tool" data-settings-tool="camera-status">
+            <p class="product-kicker">Diagnóstico</p>
+            <h2>Estado de cámaras</h2>
+            <p>Receta · versión · disco · red · en línea</p>
+            <span class="product-cta">Abrir →</span>
+          </button>
         </section>
       </div>
 
@@ -190,10 +196,40 @@
           </div>
         </div>
       </div>
+
+      <div id="settingsToolCameraStatus" class="settings-tool-panel hidden">
+        <div class="settings-tool-head">
+          <button id="diagToolBackBtn" class="btn" type="button">← Herramientas</button>
+          <div>
+            <h2>Estado de cámaras</h2>
+            <p class="settings-hint">Consulta en vivo vía API OV80i: receta, versión, disco, red y más.</p>
+          </div>
+        </div>
+
+        <div class="settings-block">
+          <div class="settings-row wrap cam-filter-row">
+            <label class="field">
+              <span>Línea</span>
+              <select id="diagFilterLine">
+                <option value="">Todas</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Producto</span>
+              <select id="diagFilterProduct">
+                <option value="">Todos</option>
+                <option value="eol">EOL</option>
+                <option value="imla">IMLA</option>
+              </select>
+            </label>
+            <button id="diagRefreshBtn" class="btn btn-accent" type="button">Actualizar estado</button>
+          </div>
+          <p id="diagMeta" class="settings-hint"></p>
+          <div id="diagCards" class="diag-cards"></div>
+        </div>
+      </div>
     </section>
   </div>
-
-  <!-- IMLA (igual que antes, con navegación propia) -->
   <div id="view-imla" class="app hidden">
     <header class="top">
       <div class="brand-block">
