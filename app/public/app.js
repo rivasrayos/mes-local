@@ -17,6 +17,7 @@ const $ = (id) => document.getElementById(id);
  *  #/imla/line/L12         IMLA line
  *  #/eol                   EOL lines
  *  #/eol/line/L12          EOL line
+ *  #/settings              admin settings
  */
 function getRoute() {
   let raw = (location.hash || '#/').replace(/^#/, '') || '/';
@@ -30,6 +31,8 @@ function getRoute() {
   if (m) return { product: 'eol', page: 'line', line: decodeURIComponent(m[1]) };
   if (/^\/eol\/?$/i.test(raw)) return { product: 'eol', page: 'home', line: '' };
 
+  if (/^\/settings\/?$/i.test(raw)) return { product: 'settings', page: 'home', line: '' };
+
   m = raw.match(/^\/line\/([^/]+)\/?$/i);
   if (m) return { product: 'imla', page: 'line', line: decodeURIComponent(m[1]), legacy: true };
 
@@ -39,8 +42,41 @@ function getRoute() {
 function goProductHome() { location.hash = '#/'; }
 function goImlaHome() { location.hash = '#/imla'; }
 function goEolHome() { location.hash = '#/eol'; }
+function goSettings() { location.hash = '#/settings'; }
 function goImlaLine(line) { location.hash = `#/imla/line/${encodeURIComponent(line)}`; }
 function goEolLine(line) { location.hash = `#/eol/line/${encodeURIComponent(line)}`; }
+
+const ADMIN_USER = 'admin';
+const ADMIN_PASS = 'admin';
+const ADMIN_SESSION_KEY = 'mes_admin_session';
+
+function isAdminLoggedIn() {
+  try {
+    return sessionStorage.getItem(ADMIN_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setAdminLoggedIn(on) {
+  try {
+    if (on) sessionStorage.setItem(ADMIN_SESSION_KEY, '1');
+    else sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function renderSettingsView() {
+  const loggedIn = isAdminLoggedIn();
+  $('settingsLoginPanel').classList.toggle('hidden', loggedIn);
+  $('settingsAppPanel').classList.toggle('hidden', !loggedIn);
+  $('settingsLogoutBtn').classList.toggle('hidden', !loggedIn);
+  if (!loggedIn) {
+    $('settingsLoginError').classList.add('hidden');
+    $('settingsLoginError').textContent = '';
+  }
+}
 
 function ensureRoute() {
   const r = getRoute();
@@ -52,7 +88,7 @@ function ensureRoute() {
 }
 
 function showView(viewId) {
-  ['view-home', 'view-imla', 'view-eol'].forEach((id) => {
+  ['view-home', 'view-imla', 'view-eol', 'view-settings'].forEach((id) => {
     $(id).classList.toggle('hidden', id !== viewId);
   });
 }
@@ -1041,6 +1077,12 @@ function updatePageChrome() {
     document.title = 'MES Local — Inspection';
     return;
   }
+  if (route.product === 'settings') {
+    showView('view-settings');
+    document.title = 'MES Local — Settings';
+    renderSettingsView();
+    return;
+  }
   if (route.product === 'eol') {
     updateEolChrome(route);
     return;
@@ -1053,7 +1095,7 @@ async function refreshAll() {
   const route = getRoute();
   updatePageChrome();
 
-  if (route.product === 'home') return;
+  if (route.product === 'home' || route.product === 'settings') return;
 
   if (route.product === 'eol') {
     const active = document.querySelector('#view-eol .tab.active')?.dataset.eolTab;
@@ -1080,6 +1122,27 @@ function wireUi() {
 
   document.querySelectorAll('.product-card[data-go]').forEach((card) => {
     card.addEventListener('click', () => { location.hash = card.dataset.go; });
+  });
+
+  $('settingsBackBtn').addEventListener('click', () => goProductHome());
+  $('settingsLogoutBtn').addEventListener('click', () => {
+    setAdminLoggedIn(false);
+    renderSettingsView();
+  });
+  $('settingsLoginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const user = ($('settingsUser').value || '').trim();
+    const pass = $('settingsPass').value || '';
+    const err = $('settingsLoginError');
+    if (user === ADMIN_USER && pass === ADMIN_PASS) {
+      setAdminLoggedIn(true);
+      $('settingsPass').value = '';
+      err.classList.add('hidden');
+      renderSettingsView();
+      return;
+    }
+    err.textContent = 'Usuario o contraseña incorrectos.';
+    err.classList.remove('hidden');
   });
 
   $('backBtn').addEventListener('click', () => {

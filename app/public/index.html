@@ -35,6 +35,52 @@
         <p>End of Line · multi-línea · dashboard y CSV</p>
         <span class="product-cta">Abrir EOL →</span>
       </button>
+      <button type="button" class="product-card settings" data-go="#/settings">
+        <p class="product-kicker">Administración</p>
+        <h2>Settings</h2>
+        <p>Configuración · solo admin</p>
+        <span class="product-cta">Abrir Settings →</span>
+      </button>
+    </section>
+  </div>
+
+  <!-- SETTINGS (admin) -->
+  <div id="view-settings" class="app hidden">
+    <header class="top">
+      <div class="brand-block">
+        <p class="eyebrow">Manufacturing Execution</p>
+        <h1>Settings</h1>
+        <p class="sub">Configuración del sistema · acceso admin</p>
+      </div>
+      <div class="top-actions">
+        <button id="settingsBackBtn" class="btn" type="button">← Volver</button>
+        <button id="settingsLogoutBtn" class="btn hidden" type="button">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <section id="settingsLoginPanel" class="settings-panel">
+      <h2>Iniciar sesión</h2>
+      <p class="settings-hint">Usuario y contraseña de administrador (pruebas).</p>
+      <form id="settingsLoginForm" class="settings-login-form">
+        <label class="field">
+          <span>Usuario</span>
+          <input id="settingsUser" type="text" autocomplete="username" required />
+        </label>
+        <label class="field">
+          <span>Contraseña</span>
+          <input id="settingsPass" type="password" autocomplete="current-password" required />
+        </label>
+        <p id="settingsLoginError" class="settings-error hidden" role="alert"></p>
+        <button class="btn btn-accent" type="submit">Entrar</button>
+      </form>
+    </section>
+
+    <section id="settingsAppPanel" class="settings-panel hidden">
+      <h2>Panel de administración</h2>
+      <p class="settings-hint">Sesión iniciada como <strong>admin</strong>. Aquí irán las opciones de configuración.</p>
+      <div class="settings-placeholder">
+        <p>Listo para continuar (mapeo de cámaras EOL, etc.).</p>
+      </div>
     </section>
   </div>
 

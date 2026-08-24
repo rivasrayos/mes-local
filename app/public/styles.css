@@ -58,9 +58,9 @@ body::before {
 
 .product-picker {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
-  max-width: 860px;
+  max-width: 1100px;
 }
 
 .product-card {
@@ -78,6 +78,14 @@ body::before {
   transform: translateY(-3px);
   border-color: var(--accent);
   box-shadow: 0 22px 40px rgba(20, 33, 43, 0.12);
+}
+
+.product-card.settings:hover {
+  border-color: #3d4f5f;
+}
+
+.product-card.settings .product-kicker {
+  color: #3d4f5f;
 }
 
 .product-card.eol:hover {
@@ -853,4 +861,67 @@ th {
   .charts-grid { grid-template-columns: 1fr; }
   .chart-block.wide { grid-column: auto; }
   .charts-grid .wide-span { grid-template-columns: 1fr; }
+}
+
+.settings-panel {
+  background: var(--panel);
+  border: 1px solid rgba(197, 208, 217, 0.85);
+  border-radius: 16px;
+  padding: 1.35rem 1.4rem;
+  box-shadow: var(--shadow);
+  max-width: 480px;
+}
+
+.settings-panel h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+}
+
+.settings-hint {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.settings-login-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.settings-login-form .field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.settings-login-form .field span {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings-login-form input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  background: #fff;
+}
+
+.settings-error {
+  margin: 0;
+  color: var(--fail);
+  font-size: 0.92rem;
+}
+
+.settings-placeholder {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.settings-placeholder p {
+  margin: 0;
+  color: var(--muted);
 }
